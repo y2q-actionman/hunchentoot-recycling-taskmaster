@@ -1,0 +1,5 @@
+An experiment to improve multithreading performance of hunchentoot
+without any additional dependencies.
+
+I'm going to try to reuse threads within connections, by sharing the
+listen socket.
