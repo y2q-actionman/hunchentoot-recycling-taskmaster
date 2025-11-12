@@ -43,15 +43,19 @@
 ;;; TODO
 
 (defmethod hunchentoot:start ((acceptor parallel-acceptor))
-  (error "TODO: under implementation"))
+  ;; currently, nothing special to do.
+  (call-next-method))
 
 (defmethod hunchentoot:stop ((acceptor parallel-acceptor) &key soft)
-  (error "TODO: under implementation"))
+  ;; TODO: FIXME: Should parallel-acceptor avoid `wake-acceptor-for-shutdown'?
+  (declare (ignorable soft))
+  (call-next-method))
 
 ;;; `hunchentoot:started-p' is same.
 
 (defmethod hunchentoot:start-listening ((acceptor parallel-acceptor))
-  (error "TODO: under implementation"))
+  ;; currently, nothing special to do.
+  (call-next-method))
 
 (defmethod hunchentoot:accept-connections ((acceptor parallel-acceptor))
   (error "TODO: under implementation"))
@@ -82,7 +86,8 @@
 
 ;;; `hunchentoot:acceptor-remove-session' is same.
 
-(defmethod hunchentoot:acceptor-server-name ((acceptor parallel-acceptor))
+(defmethod hunchentoot::acceptor-server-name ((acceptor parallel-acceptor))
+  ;; FIXME: this is unexported!!
   ;; FIXME: a good version string..
   (format nil "Hunchentoot-recycle 0.0.0 (experimental), based on ~A"
           (call-next-method)))
