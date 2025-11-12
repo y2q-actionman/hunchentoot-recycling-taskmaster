@@ -3,3 +3,15 @@ without any additional dependencies.
 
 I'm going to try to reuse threads within connections, by sharing the
 listen socket.
+
+
+_______-
+
+TODO:
+
+- make a small hacked version of one-thread-per-connection-taskmaster,
+  just taking an advantage of atimic operators of bordeaux-threads.
+
+- to do it:
+  1. try use atomic-ops at the constructor.
+  2. If "not-implemented" was signaled, simply raises an error.
