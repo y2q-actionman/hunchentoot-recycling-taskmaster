@@ -58,7 +58,35 @@
   (call-next-method))
 
 (defmethod hunchentoot:accept-connections ((acceptor parallel-acceptor))
-  (error "TODO: under implementation"))
+  "This works like the parental method, except removing some works for
+sharing the listen socket."
+  ;; `usocket:with-server-socket' is not used because it automatically
+  ;; calls close(2) but every parallel-acceptors should not do
+  ;; it. close(2) should be called only once, by `hunchentoot:stop'.
+  (let ((listener (hunchentoot::acceptor-listen-socket acceptor)))
+    (usocket:with-mapped-conditions (listener)
+      (loop
+        (hunchentoot::with-lock-held ((hunchentoot::acceptor-shutdown-lock acceptor))
+          (when (hunchentoot::acceptor-shutdown-p acceptor)
+            (return)))
+        ;; I think `usocket:wait-for-input' is not required because it
+        ;; works over only one listen socket and the socket blocks
+        ;; `usocket:socket-accept' until accept(2) returns.
+        (when-let (client-connection
+                   (handler-case (usocket:socket-accept listener)
+                     ;; ignore condition
+                     (usocket:connection-aborted-error ())))
+                  (hunchentoot::set-timeouts client-connection
+                                             (hunchentoot:acceptor-read-timeout acceptor)
+                                             (hunchentoot:acceptor-write-timeout acceptor))
+                  (hunchentoot:handle-incoming-connection
+                   (hunchentoot::acceptor-taskmaster acceptor)
+                   client-connection))))))
+;;; TODO:
+;;; - validate our own `accept-connections' is required not not.
+;;;   I think points fixed above may not be strictly required.
+;;; - By the way, above changes may be exported to the original
+;;;   hunchentoot.
 
 ;;; `hunchentoot:initialize-connection-stream' is same.
 
@@ -91,3 +119,6 @@
   ;; FIXME: a good version string..
   (format nil "Hunchentoot-recycle 0.0.0 (experimental), based on ~A"
           (call-next-method)))
+
+;;; TODO
+;; - Rework `hunchentoot:shutdown' related functions, utilizing shutdown(2).
