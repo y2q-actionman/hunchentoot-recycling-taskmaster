@@ -31,9 +31,7 @@
    ;; - shutdown-lock
    )
   (:default-initargs
-   :taskmaster 'recycling-taskmaster
-   )
-  )
+   :taskmaster (make-instance 'recycling-taskmaster)))
 
 ;;; parallel-acceptor synchronizes accept(2) on the listen socket, so
 ;;; it requires the socket interface, usocket.  Sadly, this means
@@ -122,3 +120,15 @@ sharing the listen socket."
 
 ;;; TODO
 ;; - Rework `hunchentoot:shutdown' related functions, utilizing shutdown(2).
+
+
+;;; Derived classes
+(defclass parallel-ssl-acceptor (parallel-acceptor hunchentoot:ssl-acceptor)
+  ())
+
+(defclass parallel-easy-acceptor (parallel-acceptor hunchentoot:easy-acceptor)
+  ())
+
+(defclass parallel-easy-ssl-acceptor (parallel-easy-acceptor parallel-ssl-acceptor)
+  ())
+

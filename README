@@ -5,7 +5,19 @@ I'm going to try to reuse threads within connections, by sharing the
 listen socket.
 
 
-_______-
+How to use:
+
+```
+(let* ((taskmaster
+      	 (make-instance 'hunchentoot-recycle:recycling-taskmaster
+                        :initial-thread-count 8))
+       (acceptor (make-instance 'hunchentoot-recycle:parallel-easy-acceptor
+                                :port 4242
+                                :taskmaster taskmaster)))
+  (hunchentoot:start acceptor))
+```
+
+_______
 
 TODO:
 
