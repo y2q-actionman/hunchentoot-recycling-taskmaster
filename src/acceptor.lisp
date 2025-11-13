@@ -47,6 +47,7 @@
 (defmethod hunchentoot:stop ((acceptor parallel-acceptor) &key soft)
   ;; TODO: FIXME: Should parallel-acceptor avoid `wake-acceptor-for-shutdown'?
   (declare (ignorable soft))
+  ;; TODO: make SOFT parameter to a special variable to be seen by `hunchentoot:shutdown'
   (call-next-method))
 
 ;;; `hunchentoot:started-p' is same.
