@@ -48,7 +48,7 @@
                     (lambda (&optional e)
                       (declare (ignore e))
                       (when (and
-                             (acceptor-shutdown-p acceptor)
+                             (hunchentoot::acceptor-shutdown-p acceptor)
                              (not (open-stream-p (hunchentoot::acceptor-listen-socket acceptor))))
                         ;; Here, our server was shutdown so the listen
                         ;; socket was closed by the one of
