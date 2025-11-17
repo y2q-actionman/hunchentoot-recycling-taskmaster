@@ -107,8 +107,12 @@ Thread states:
                   (error
                     (lambda (&optional e)
                       (when (and
-                             (hunchentoot::acceptor-shutdown-p acceptor)
-                             (not (open-stream-p (hunchentoot::acceptor-listen-socket acceptor))))
+                             (hunchentoot::with-lock-held
+                                 ((hunchentoot::acceptor-shutdown-lock acceptor))
+                               (hunchentoot::acceptor-shutdown-p acceptor))
+                             (let ((sock (hunchentoot::acceptor-listen-socket acceptor)))
+                               (or (null sock) ; may be nil if already closed.
+                                   (not (open-stream-p sock)))))
                         ;; Here, our server was shutdown so the listen
                         ;; socket was closed by the one of
                         ;; parallel-acceptors.  accept(2) to a closed
