@@ -233,13 +233,12 @@ Thread states:
     repeat (recycling-taskmaster-parallel-acceptor-thread-count taskmaster)
     do (hunchentoot::wake-acceptor-for-shutdown acceptor))
   (when *soft-shutdown*
-    (loop
-      while (plusp
-             (recycling-taskmaster-parallel-acceptor-thread-count-synchronized taskmaster))
-      do (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-shutdown-queue-lock taskmaster))
-           (hunchentoot::condition-variable-wait
-            (recycling-taskmaster-parallel-acceptor-shutdown-queue taskmaster)
-            (recycling-taskmaster-parallel-acceptor-shutdown-queue-lock taskmaster))))))
+    (when (plusp
+           (recycling-taskmaster-parallel-acceptor-thread-count-synchronized taskmaster))
+      (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-shutdown-queue-lock taskmaster))
+        (hunchentoot::condition-variable-wait
+         (recycling-taskmaster-parallel-acceptor-shutdown-queue taskmaster)
+         (recycling-taskmaster-parallel-acceptor-shutdown-queue-lock taskmaster))))))
 
 (defmethod hunchentoot:create-request-handler-thread ((taskmaster recycling-taskmaster) client-connection)
   "This method is never called for `recycling-taskmaster'."
