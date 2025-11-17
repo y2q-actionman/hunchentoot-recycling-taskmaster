@@ -5,13 +5,10 @@
 (defclass recycling-taskmaster (hunchentoot:one-thread-per-connection-taskmaster)
   (;; Overwrites
    (hunchentoot::acceptor-process
-    :initform nil
     :documentation "recycling-taskmaster does not track acceptor processes.")
    (hunchentoot::worker-thread-name-format
     :initform "hunchentoot-parallel-acceptor-~A:~A"
     :documentation "Overriden for parallel-acceptor.")
-   (hunchentoot::thread-count       ; only for changing :documentation
-    :documentation "The number of threads currently running for processing client connections. This is same meaning of the original `hunchentoot:one-thread-per-connection-taskmaster'")
    ;; new slots.
    (initial-thread-count
     :type integer
@@ -175,7 +172,7 @@ Thread states:
   ;; 2. Wakes every threads waiting the listen socket.
   ;;    -> utilize `hunchentoot::wake-acceptor-for-shutdown' here.
   ;; 
-  ;; I saw shotdown(2) can be usable for this purpose:
+  ;; NOTE: I saw shutdown(2) can be usable for this purpose:
   ;;    https://stackoverflow.com/questions/9365282/c-linux-accept-blocking-after-socket-closed
   ;; However, usocket does not permit `usocket:socket-shotdown' to a listen socket.
   ;; Even when I `change-class'ed it, Allegro CL does not permit also.
