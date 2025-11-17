@@ -15,15 +15,10 @@
 ;;; it requires the socket interface, usocket.  Sadly, this means
 ;;; Lispworks cannot be supported because usocket is unused.
 
-(defmethod hunchentoot:start ((acceptor parallel-acceptor))
-  ;; currently, nothing special to do.
-  (call-next-method))
-
 (defmethod hunchentoot:stop ((acceptor parallel-acceptor) &key soft)
-  ;; TODO: FIXME: Should parallel-acceptor avoid `wake-acceptor-for-shutdown'?
-  (declare (ignorable soft))
-  ;; TODO: make SOFT parameter to a special variable to be seen by `hunchentoot:shutdown'
-  (call-next-method))
+  "Make SOFT parameter to a special variable to be seen by `hunchentoot:shutdown'"
+  (let ((*soft-shutdown* soft))
+    (call-next-method)))
 
 (defmethod hunchentoot:accept-connections ((acceptor parallel-acceptor))
   "This works like the parental method, except removing some works for

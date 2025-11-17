@@ -1,6 +1,7 @@
 (in-package #:hunchentoot-recycle)
 
 (defvar *default-initial-thread-count* 2)
+(defvar *soft-shutdown* nil)
 
 (defclass recycling-taskmaster (hunchentoot:one-thread-per-connection-taskmaster)
   (;; Overwrites
@@ -38,7 +39,17 @@
     :initform (hunchentoot::make-lock "recycling-taskmaster-parallel-acceptor-handling-thread-count")
     :reader recycling-taskmaster-parallel-acceptor-handling-thread-count-lock
     :documentation
-    "A lock for atomically incrementing/decrementing the parallel-acceptor-handling-thread-count-lock slot."))
+    "A lock for atomically incrementing/decrementing the parallel-acceptor-handling-thread-count-lock slot.")
+   (parallel-acceptor-shutdown-queue
+    :initform (hunchentoot::make-condition-variable)
+    :reader recycling-taskmaster-parallel-acceptor-shutdown-queue
+    :documentation
+    "A condition variable to wait for all threads end.")
+   (parallel-acceptor-shutdown-queue-lock
+    :initform (hunchentoot::make-lock "parallel-acceptor-shutdown-queue-lock")
+    :reader recycling-taskmaster-parallel-acceptor-shutdown-queue-lock
+    :documentation
+    "The lock for parallel-acceptor-shutdown-queue."))
   (:default-initargs
    :initial-thread-count *default-initial-thread-count*)
   (:documentation "(stub)
@@ -73,6 +84,10 @@ Thread states:
                (not (<= initial max-accept-count)))
       (hunchentoot:parameter-error "INITIAL-THREAD-COUNT must be equal or less than MAX-ACCEPT-COUNT"))))
 
+(defmethod recycling-taskmaster-parallel-acceptor-thread-count-synchronized ((taskmaster recycling-taskmaster))
+  (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-thread-count-lock taskmaster))
+    (recycling-taskmaster-parallel-acceptor-thread-count taskmaster)))
+
 (defmethod increment-recycling-taskmaster-parallel-acceptor-thread-count ((taskmaster recycling-taskmaster))
   (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-thread-count-lock taskmaster))
     (incf (recycling-taskmaster-parallel-acceptor-thread-count taskmaster))))
@@ -86,12 +101,22 @@ Thread states:
     (incf (recycling-taskmaster-parallel-acceptor-handling-thread-count taskmaster))))
 
 (defmethod decrement-recycling-taskmaster-parallel-acceptor-handling-thread-count ((taskmaster recycling-taskmaster))
-  (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-handling-thread-count-lock taskmaster))
-    (decf (recycling-taskmaster-parallel-acceptor-handling-thread-count taskmaster))))
+  (let ((cnt
+          (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-handling-thread-count-lock taskmaster))
+            (decf (recycling-taskmaster-parallel-acceptor-handling-thread-count taskmaster)))))
+    (prog1 cnt
+      (when (<= cnt 0)
+        (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-shutdown-queue-lock taskmaster))
+          (hunchentoot::condition-variable-signal (recycling-taskmaster-parallel-acceptor-shutdown-queue taskmaster)))))))
 
 (define-condition end-of-parallel-acceptor-thread (condition)
   ()
   (:documentation "Thrown when parallel-acceptor-thread ends."))
+
+(defmethod acceptor-shutdown-p-synchronized (acceptor)
+  (hunchentoot::with-lock-held
+      ((hunchentoot::acceptor-shutdown-lock acceptor))
+    (hunchentoot::acceptor-shutdown-p acceptor)))
 
 (defmethod make-parallel-acceptor-thread ((taskmaster recycling-taskmaster))
   "Makes a new thread for `parallel-acceptor'."
@@ -107,9 +132,7 @@ Thread states:
                   (error
                     (lambda (&optional e)
                       (when (and
-                             (hunchentoot::with-lock-held
-                                 ((hunchentoot::acceptor-shutdown-lock acceptor))
-                               (hunchentoot::acceptor-shutdown-p acceptor))
+                             (acceptor-shutdown-p-synchronized acceptor)
                              (let ((sock (hunchentoot::acceptor-listen-socket acceptor)))
                                (or (null sock) ; may be nil if already closed.
                                    (not (open-stream-p sock)))))
@@ -137,35 +160,34 @@ Thread states:
  accept(2). It processs client-connection by itself and controls how
  many threads working around the process. "
   (unwind-protect
-       (progn
-         (let* ((handling-threads
-                  (increment-recycling-taskmaster-parallel-acceptor-handling-thread-count taskmaster))
-                (all-threads
-                  (recycling-taskmaster-parallel-acceptor-thread-count taskmaster))
-                (accepting-threads
-                  (- all-threads handling-threads)))
-           ;; Makes a thread if all threads are busy.
-           ;; TODO: add limits
-           (when (<= accepting-threads 0)
-             (make-parallel-acceptor-thread taskmaster)))
+       (let ((handling-threads
+               (increment-recycling-taskmaster-parallel-acceptor-handling-thread-count taskmaster))
+             (all-threads
+               (recycling-taskmaster-parallel-acceptor-thread-count taskmaster))
+             (acceptor (hunchentoot::taskmaster-acceptor taskmaster)))
+         ;; Makes a thread if all threads are busy.
+         (when (and (<= all-threads handling-threads)
+                    ;; TODO: add limits here
+                    (not (hunchentoot::acceptor-shutdown-p acceptor))) 
+           (make-parallel-acceptor-thread taskmaster))
          ;; process the connection by itself.
          (hunchentoot::handle-incoming-connection% taskmaster client-connection)
          ;; See waiters to determine whether this thread is recyclied or not.
-         (let* ((all-threads
-                  (recycling-taskmaster-parallel-acceptor-thread-count taskmaster))
-                (handling-threads
-                  (recycling-taskmaster-parallel-acceptor-handling-thread-count taskmaster))
-                (accepting-threads
-                  (- all-threads handling-threads)))
-           (cond
-             ((<= accepting-threads 0)
-              ;; There may be a pending connections. This thread should handle it now!
-              (progn))
-             (t
-              ;; Other threads might be waiting on the listen socket besides this thread.
-              ;; Assuming there are no pending requests, this thread may exit.
-              (when (< (recycling-taskmaster-initial-thread-count taskmaster) all-threads)
-                (signal 'end-of-parallel-acceptor-thread))))))
+         (setf all-threads
+               (recycling-taskmaster-parallel-acceptor-thread-count taskmaster)
+               handling-threads
+               (recycling-taskmaster-parallel-acceptor-handling-thread-count taskmaster))
+         (cond
+           ((hunchentoot::acceptor-shutdown-p acceptor)
+            (signal 'end-of-parallel-acceptor-thread))
+           ((<= all-threads handling-threads)
+            ;; There may be a pending connections. This thread should handle it now!
+            (progn))
+           (t
+            ;; Other threads might be waiting on the listen socket besides this thread.
+            ;; Assuming there are no pending requests, this thread may exit.
+            (when (< (recycling-taskmaster-initial-thread-count taskmaster) all-threads)
+              (signal 'end-of-parallel-acceptor-thread)))))
     (decrement-recycling-taskmaster-parallel-acceptor-handling-thread-count taskmaster)))
 
 (defmethod hunchentoot:shutdown ((taskmaster recycling-taskmaster))
@@ -182,13 +204,18 @@ Thread states:
   ;; Even when I `change-class'ed it, Allegro CL does not permit also.
   (loop
     with acceptor = (hunchentoot:taskmaster-acceptor taskmaster)
-    with thread-count = (1- ; because `hunchentoot:stop' calls it once.
-                         ;; FIXME: use a *current* value.
-                         (recycling-taskmaster-initial-thread-count taskmaster))
-    repeat thread-count
+      initially (unless (hunchentoot::acceptor-listen-socket acceptor)
+                  (return-from hunchentoot:shutdown nil))
+    repeat (recycling-taskmaster-parallel-acceptor-thread-count taskmaster)
     do (hunchentoot::wake-acceptor-for-shutdown acceptor))
-  ;; TODO: wait for all threads end.
-  )
+  (when *soft-shutdown*
+    (loop
+      while (plusp
+             (recycling-taskmaster-parallel-acceptor-thread-count-synchronized taskmaster))
+      do (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-shutdown-queue-lock taskmaster))
+           (hunchentoot::condition-variable-wait
+            (recycling-taskmaster-parallel-acceptor-shutdown-queue taskmaster)
+            (recycling-taskmaster-parallel-acceptor-shutdown-queue-lock taskmaster))))))
 
 (defmethod hunchentoot:create-request-handler-thread ((taskmaster recycling-taskmaster) client-connection)
   "This method is never called for `recycling-taskmaster'."
