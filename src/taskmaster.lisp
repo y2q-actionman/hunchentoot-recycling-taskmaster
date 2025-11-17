@@ -1,7 +1,10 @@
 (in-package #:hunchentoot-recycle)
 
 (defvar *default-initial-thread-count* 2)
+(defvar *default-max-worker-count* 8)
 (defvar *soft-shutdown* nil)
+
+;;; TODO: rename parallel-acceptor -> worker
 
 (defclass recycling-taskmaster (hunchentoot:one-thread-per-connection-taskmaster)
   (;; Overwrites
@@ -14,10 +17,21 @@
    (initial-thread-count
     :type integer
     :initarg :initial-thread-count
-    :initform 2
+    :initform *default-initial-thread-count*
     :accessor recycling-taskmaster-initial-thread-count
     :documentation 
     "The number of how many threads created at first or off-peak.")
+   (max-worker-count
+    :type (or null integer) 
+    :initarg :max-worker-count
+    :initform *default-max-worker-count*
+    :accessor recycling-taskmaster-max-worker-count
+    :documentation 
+    "The number of how many workers may be created at peak. If this
+exceeds `hunchentoot:taskmaster-max-thread-count' or
+`hunchentoot:taskmaster-max-accept-count', exceeded workers behave
+like the original hunchentoot.  If this is NIL, there is no limit
+except hunchentoot's limits by above variables. ")
    (parallel-acceptor-thread-count
     :type integer
     :initform 0
@@ -50,8 +64,6 @@
     :reader recycling-taskmaster-parallel-acceptor-shutdown-queue-lock
     :documentation
     "The lock for parallel-acceptor-shutdown-queue."))
-  (:default-initargs
-   :initial-thread-count *default-initial-thread-count*)
   (:documentation "(stub)
 
 Thread states:
@@ -73,10 +85,14 @@ Thread states:
   "If INITIAL-THREAD-COUNT is supplied, ensure it is equal or less than other count parameters."
   (declare (ignore init-args))
   (with-accessors ((initial recycling-taskmaster-initial-thread-count)
+                   (max-worker-count recycling-taskmaster-max-worker-count)
                    (max-thread-count hunchentoot:taskmaster-max-thread-count)
                    (max-accept-count hunchentoot:taskmaster-max-accept-count))
       taskmaster
     (check-type initial integer)
+    (when (and max-worker-count
+               (not (<= initial max-worker-count)))
+      (hunchentoot:parameter-error "INITIAL-THREAD-COUNT must be equal or less than MAX-WORKER-COUNT"))
     (when (and max-thread-count
                (not (<= initial max-thread-count)))
       (hunchentoot:parameter-error "INITIAL-THREAD-COUNT must be equal or less than MAX-THREAD-COUNT"))
@@ -167,7 +183,15 @@ Thread states:
              (acceptor (hunchentoot::taskmaster-acceptor taskmaster)))
          ;; Makes a thread if all threads are busy.
          (when (and (<= all-threads handling-threads)
-                    ;; TODO: add limits here
+                    (if-let ((max-worker (recycling-taskmaster-max-worker-count taskmaster)))
+                      (< all-threads max-worker)
+                      t)
+                    (if-let ((max-thread (hunchentoot:taskmaster-max-thread-count taskmaster)))
+                      (< all-threads max-thread)
+                      t)
+                    (if-let ((max-accept (hunchentoot:taskmaster-max-accept-count taskmaster)))
+                      (< all-threads max-accept)
+                      t)
                     (not (hunchentoot::acceptor-shutdown-p acceptor))) 
            (make-parallel-acceptor-thread taskmaster))
          ;; process the connection by itself.
