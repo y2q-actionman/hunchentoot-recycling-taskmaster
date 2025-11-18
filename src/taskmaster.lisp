@@ -4,12 +4,10 @@
 (defvar *default-max-worker-count* 8)
 
 (defclass recycling-taskmaster (hunchentoot:one-thread-per-connection-taskmaster)
-  (;; Overwrites
-   (hunchentoot::acceptor-process
+  ((hunchentoot::acceptor-process       ; overwrites
     :type hash-table
     :initform (make-hash-table :test 'equal)
     :documentation "recycling-taskmaster tracks processes using a hash-table.")
-   ;; new slots.
    (acceptor-process-lock
     :initform (hunchentoot::make-lock "recycling-taskmaster-acceptor-process-lock")
     :reader recycling-taskmaster-acceptor-process-lock
@@ -37,17 +35,22 @@ exceeds `hunchentoot:taskmaster-max-thread-count' or
 `hunchentoot:taskmaster-max-accept-count', exceeded workers behave
 like the original hunchentoot.  If this is NIL, there is no limit
 except hunchentoot's limits by above variables. ")
-   (parallel-acceptor-handling-thread-count
+   (busy-worker-count
     :type integer
     :initform 0
-    :accessor recycling-taskmaster-parallel-acceptor-handling-thread-count
+    :accessor recycling-taskmaster-busy-worker-count
     :documentation
-    "The number of threads made by recycling-taskmaster and working on `hunchentoot:handle-incoming-connection'.")
-   (parallel-acceptor-handling-thread-count-lock
-    :initform (hunchentoot::make-lock "recycling-taskmaster-parallel-acceptor-handling-thread-count")
-    :reader recycling-taskmaster-parallel-acceptor-handling-thread-count-lock
+    "The number of threads working on `hunchentoot:handle-incoming-connection'.")
+   (busy-worker-count-lock
+    :initform (hunchentoot::make-lock "recycling-taskmaster-busy-worker-count-lock")
+    :reader recycling-taskmaster-busy-worker-count-lock
     :documentation
-    "A lock for atomically incrementing/decrementing the parallel-acceptor-handling-thread-count-lock slot."))
+    "A lock for atomically incrementing/decrementing the busy-worker-count slot.")
+   (busy-worker-count-queue
+    :initform (hunchentoot::make-condition-variable)
+    :reader recycling-taskmaster-busy-worker-count-queue
+    :documentation
+    "A condition variable to wait for the ends of client connections, locked by busy-worker-count-lock."))
   (:documentation "(stub)
 
 Thread states:
@@ -85,23 +88,12 @@ Thread states:
                (not (<= initial max-accept-count)))
       (hunchentoot:parameter-error "INITIAL-THREAD-COUNT must be equal or less than MAX-ACCEPT-COUNT"))))
 
-(defmethod increment-recycling-taskmaster-parallel-acceptor-handling-thread-count ((taskmaster recycling-taskmaster))
-  (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-handling-thread-count-lock taskmaster))
-    (incf (recycling-taskmaster-parallel-acceptor-handling-thread-count taskmaster))))
-
-(defmethod decrement-recycling-taskmaster-parallel-acceptor-handling-thread-count ((taskmaster recycling-taskmaster))
-  (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-handling-thread-count-lock taskmaster))
-    (decf (recycling-taskmaster-parallel-acceptor-handling-thread-count taskmaster))))
-
-(defmethod recycling-taskmaster-thread-state (taskmaster thread)
+(defmethod add-recycling-taskmaster-thread (taskmaster thread)
   (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
-    (gethash thread (hunchentoot::acceptor-process taskmaster))))
+    (let ((table (hunchentoot::acceptor-process taskmaster)))
+      (setf (gethash thread table) t))))
 
-(defmethod (setf recycling-taskmaster-thread-state) (state taskmaster thread)
-  (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
-    (setf (gethash thread (hunchentoot::acceptor-process taskmaster)) state)))
-
-(defmethod remove-recycling-taskmaster-thread-state (taskmaster thread)
+(defmethod remove-recycling-taskmaster-thread (taskmaster thread)
   (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
     (let* ((table (hunchentoot::acceptor-process taskmaster))
            (deleted? (remhash thread table)))
@@ -113,6 +105,17 @@ Thread states:
 (defmethod count-recycling-taskmaster-thread (taskmaster)
   (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
     (hash-table-count (hunchentoot::acceptor-process taskmaster))))
+
+(defmethod increment-recycling-taskmaster-busy-worker-count ((taskmaster recycling-taskmaster))
+  (hunchentoot::with-lock-held ((recycling-taskmaster-busy-worker-count-lock taskmaster))
+    (incf (recycling-taskmaster-busy-worker-count taskmaster))))
+
+(defmethod decrement-recycling-taskmaster-busy-worker-count ((taskmaster recycling-taskmaster))
+  (hunchentoot::with-lock-held ((recycling-taskmaster-busy-worker-count-lock taskmaster))
+    (let ((rest (decf (recycling-taskmaster-busy-worker-count taskmaster))))
+      (when (<= rest 0)
+        (hunchentoot::condition-variable-signal (recycling-taskmaster-busy-worker-count-queue taskmaster)))
+      rest)))
 
 (define-condition end-of-parallel-acceptor-thread (condition)
   ()
@@ -151,58 +154,62 @@ Thread states:
                       )))
                (unwind-protect
                     (hunchentoot:accept-connections acceptor)
-                 (remove-recycling-taskmaster-thread-state taskmaster (bt:current-thread))))))
+                 (remove-recycling-taskmaster-thread taskmaster (bt:current-thread))))))
       (let ((thread (hunchentoot:start-thread taskmaster #'thunk :name name)))
-        (setf (recycling-taskmaster-thread-state taskmaster thread) :accepting)))))
+        (add-recycling-taskmaster-thread taskmaster thread)))))
 
 (defmethod hunchentoot:execute-acceptor ((taskmaster recycling-taskmaster))
   "Make initial threads working on `parallel-acceptor'."
   (loop repeat (recycling-taskmaster-initial-thread-count taskmaster)
         do (make-parallel-acceptor-thread taskmaster)))
 
+(defmacro with-counting-busy-worker ((var) taskmaster &body body)
+  "Executes BODY by incrementing busy-worker-count of TASKMASTER.
+ Its value is bound to VAR."
+  (let ((taskmaster_ (gensym)))
+    `(let* ((,taskmaster_ ,taskmaster)
+            (,var (increment-recycling-taskmaster-busy-worker-count ,taskmaster_)))
+       (unwind-protect
+            (progn ,@body)
+         (decrement-recycling-taskmaster-busy-worker-count ,taskmaster_)))))
+
 (defmethod hunchentoot:handle-incoming-connection ((taskmaster recycling-taskmaster) client-connection)
   "This function is the core of `recycling-taskmaster'. It is called
  in the loop of `hunchentoot:accept-connections' on every
  accept(2). It processs client-connection by itself and controls how
  many threads working around the process. "
-  (unwind-protect
-       (let ((handling-threads
-               (increment-recycling-taskmaster-parallel-acceptor-handling-thread-count taskmaster))
-             (all-threads
-               (count-recycling-taskmaster-thread taskmaster))
-             (acceptor (hunchentoot::taskmaster-acceptor taskmaster)))
-         ;; Makes a thread if all threads are busy.
-         (when (and (<= all-threads handling-threads)
-                    (if-let ((max-worker (recycling-taskmaster-max-worker-count taskmaster)))
-                      (< all-threads max-worker)
-                      t)
-                    (if-let ((max-thread (hunchentoot:taskmaster-max-thread-count taskmaster)))
-                      (< all-threads max-thread)
-                      t)
-                    (if-let ((max-accept (hunchentoot:taskmaster-max-accept-count taskmaster)))
-                      (< all-threads max-accept)
-                      t)
-                    (not (hunchentoot::acceptor-shutdown-p acceptor))) 
-           (make-parallel-acceptor-thread taskmaster))
-         ;; process the connection by itself.
-         (hunchentoot::handle-incoming-connection% taskmaster client-connection)
-         ;; See waiters to determine whether this thread is recyclied or not.
-         (setf all-threads
-               (count-recycling-taskmaster-thread taskmaster)
-               handling-threads
-               (recycling-taskmaster-parallel-acceptor-handling-thread-count taskmaster))
-         (cond
-           ((hunchentoot::acceptor-shutdown-p acceptor)
-            (signal 'end-of-parallel-acceptor-thread))
-           ((<= all-threads handling-threads)
-            ;; There may be a pending connections. This thread should handle it now!
-            (progn))
-           (t
-            ;; Other threads might be waiting on the listen socket besides this thread.
-            ;; Assuming there are no pending requests, this thread may exit.
-            (when (< (recycling-taskmaster-initial-thread-count taskmaster) all-threads)
-              (signal 'end-of-parallel-acceptor-thread)))))
-    (decrement-recycling-taskmaster-parallel-acceptor-handling-thread-count taskmaster)))
+  (when (acceptor-shutdown-p-synchronized (hunchentoot::taskmaster-acceptor taskmaster))
+    (signal 'end-of-parallel-acceptor-thread))
+  (with-counting-busy-worker (busy-workers) taskmaster
+    (let (all-threads accepting-threads)
+      (setf all-threads (count-recycling-taskmaster-thread taskmaster)
+            accepting-threads (- all-threads busy-workers))
+      ;; Makes a thread if all threads are busy.
+      (when (and (<= accepting-threads 0)
+                 (if-let ((max-worker (recycling-taskmaster-max-worker-count taskmaster)))
+                   (< all-threads max-worker)
+                   t)
+                 (if-let ((max-thread (hunchentoot:taskmaster-max-thread-count taskmaster)))
+                   (< all-threads max-thread)
+                   t)
+                 (if-let ((max-accept (hunchentoot:taskmaster-max-accept-count taskmaster)))
+                   (< all-threads max-accept)
+                   t)) 
+        (make-parallel-acceptor-thread taskmaster))
+      ;; process the connection by itself.
+      (hunchentoot::handle-incoming-connection% taskmaster client-connection)
+      ;; If already shut down, return immediately.
+      (when (acceptor-shutdown-p-synchronized (hunchentoot::taskmaster-acceptor taskmaster))
+        (signal 'end-of-parallel-acceptor-thread))
+      ;; See waiters to determine whether this thread is recyclied or not.
+      (setf all-threads (count-recycling-taskmaster-thread taskmaster)
+            accepting-threads (- all-threads busy-workers))
+      (when (and
+             ;; Someone is waiting -- means no pending connections.
+             (plusp accepting-threads)
+             ;; and there are enough other threads.
+             (< (recycling-taskmaster-initial-thread-count taskmaster) all-threads))
+        (signal 'end-of-parallel-acceptor-thread)))))
 
 (defun wake-acceptor-for-shutdown-using-listen-socket (listen-socket)
   "Works like `hunchentoot::wake-acceptor-for-shutdown', except 
@@ -225,9 +232,15 @@ Thread states:
   "Tell every workers to shutdown."
   ;; 1. Sets a flag saying "end itself" to the worker threads.
   ;;    -> done by `hunchentoot:stop' setting `hunchentoot::acceptor-shutdown-p'
-  ;; 
-  ;; 2. Wakes every threads waiting the listen socket.
-  ;;    -> utilize `hunchentoot::wake-acceptor-for-shutdown' here.
+  ;;
+  ;; 2. Waits threads in `hunchentoot:handle-incoming-connection'.
+  (hunchentoot::with-lock-held ((recycling-taskmaster-busy-worker-count-lock taskmaster))
+    (when (plusp (recycling-taskmaster-busy-worker-count taskmaster))
+      (hunchentoot::condition-variable-wait
+       (recycling-taskmaster-busy-worker-count-queue taskmaster)
+       (recycling-taskmaster-busy-worker-count-lock taskmaster))))
+  ;; 3. Wakes every threads waiting the listen socket, using
+  ;; `wake-acceptor-for-shutdown-using-listen-socket'
   ;; 
   ;; NOTE: I saw shutdown(2) can be usable for this purpose:
   ;;    https://stackoverflow.com/questions/9365282/c-linux-accept-blocking-after-socket-closed
