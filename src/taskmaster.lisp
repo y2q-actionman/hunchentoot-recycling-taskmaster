@@ -9,9 +9,6 @@
     :type hash-table
     :initform (make-hash-table :test 'equal)
     :documentation "recycling-taskmaster tracks processes using a hash-table.")
-   (hunchentoot::worker-thread-name-format
-    :initform "hunchentoot-parallel-acceptor-~A:~A"
-    :documentation "Overriden for parallel-acceptor.")
    ;; new slots.
    (acceptor-process-lock
     :initform (hunchentoot::make-lock "recycling-taskmaster-acceptor-process-lock")
@@ -129,9 +126,10 @@ Thread states:
 (defmethod make-parallel-acceptor-thread ((taskmaster recycling-taskmaster))
   "Makes a new thread for `parallel-acceptor'."
   (let* ((acceptor (hunchentoot:taskmaster-acceptor taskmaster))
+         (name-sig (format nil "~A:~A" (or (hunchentoot:acceptor-address acceptor) "*")
+                           (hunchentoot:acceptor-port acceptor)))
          (name (format nil (hunchentoot::taskmaster-worker-thread-name-format taskmaster)
-                       (or (hunchentoot:acceptor-address acceptor) "*")
-                       (hunchentoot:acceptor-port acceptor))))
+                       name-sig)))
     (flet ((thunk ()
              (handler-bind
                  ((end-of-parallel-acceptor-thread
