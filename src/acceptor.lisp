@@ -16,9 +16,22 @@
 ;;; Lispworks cannot be supported because usocket is not used.
 
 (defmethod hunchentoot:stop ((acceptor parallel-acceptor) &key soft)
-  "Make SOFT parameter to a special variable to be seen by `hunchentoot:shutdown'"
-  (let ((*soft-shutdown* soft))
-    (call-next-method)))
+  "This works like the parental method, except some works for sharing
+the listen socket."
+  (hunchentoot::with-lock-held ((hunchentoot::acceptor-shutdown-lock acceptor))
+    (setf (hunchentoot::acceptor-shutdown-p acceptor) t))
+  (let ((taskmaster (hunchentoot::acceptor-taskmaster acceptor)))
+    (hunchentoot:shutdown taskmaster)
+    (when soft
+      ;; Wait for all worker ends. This includes waiting for
+      ;; `hunchentoot::acceptor-shutdown-queue' done by
+      ;; original `hunchentoot:stop'.
+      (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-thread-count-lock taskmaster))
+        (when (plusp (recycling-taskmaster-parallel-acceptor-thread-count taskmaster))
+          (wait-for-recycling-taskmaster-shutdown taskmaster)))))
+  (usocket:socket-close (hunchentoot::acceptor-listen-socket acceptor))
+  (setf (hunchentoot::acceptor-listen-socket acceptor) nil)
+  acceptor)
 
 (defmethod hunchentoot:accept-connections ((acceptor parallel-acceptor))
   "This works like the parental method, except some works for sharing
