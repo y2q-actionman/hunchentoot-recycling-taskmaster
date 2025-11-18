@@ -26,8 +26,8 @@ the listen socket."
       ;; Wait for all worker ends. This includes waiting for
       ;; `hunchentoot::acceptor-shutdown-queue' done by
       ;; original `hunchentoot:stop'.
-      (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-thread-count-lock taskmaster))
-        (when (plusp (recycling-taskmaster-parallel-acceptor-thread-count taskmaster))
+      (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
+        (when (plusp (count-recycling-taskmaster-thread taskmaster))
           (wait-for-recycling-taskmaster-shutdown taskmaster)))))
   (usocket:socket-close (hunchentoot::acceptor-listen-socket acceptor))
   (setf (hunchentoot::acceptor-listen-socket acceptor) nil)
