@@ -109,21 +109,21 @@ Thread states:
     (incf (recycling-taskmaster-parallel-acceptor-thread-count taskmaster))))
 
 (defmethod decrement-recycling-taskmaster-parallel-acceptor-thread-count ((taskmaster recycling-taskmaster))
-  (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-thread-count-lock taskmaster))
-    (decf (recycling-taskmaster-parallel-acceptor-thread-count taskmaster))))
+  (let ((cnt
+          (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-thread-count-lock taskmaster))
+            (decf (recycling-taskmaster-parallel-acceptor-thread-count taskmaster)))))
+    (when (<= cnt 0)
+      (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-shutdown-queue-lock taskmaster))
+        (hunchentoot::condition-variable-signal (recycling-taskmaster-parallel-acceptor-shutdown-queue taskmaster))))
+    cnt))
 
 (defmethod increment-recycling-taskmaster-parallel-acceptor-handling-thread-count ((taskmaster recycling-taskmaster))
   (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-handling-thread-count-lock taskmaster))
     (incf (recycling-taskmaster-parallel-acceptor-handling-thread-count taskmaster))))
 
 (defmethod decrement-recycling-taskmaster-parallel-acceptor-handling-thread-count ((taskmaster recycling-taskmaster))
-  (let ((cnt
-          (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-handling-thread-count-lock taskmaster))
-            (decf (recycling-taskmaster-parallel-acceptor-handling-thread-count taskmaster)))))
-    (prog1 cnt
-      (when (<= cnt 0)
-        (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-shutdown-queue-lock taskmaster))
-          (hunchentoot::condition-variable-signal (recycling-taskmaster-parallel-acceptor-shutdown-queue taskmaster)))))))
+  (hunchentoot::with-lock-held ((recycling-taskmaster-parallel-acceptor-handling-thread-count-lock taskmaster))
+    (decf (recycling-taskmaster-parallel-acceptor-handling-thread-count taskmaster))))
 
 (define-condition end-of-parallel-acceptor-thread (condition)
   ()
@@ -214,6 +214,23 @@ Thread states:
               (signal 'end-of-parallel-acceptor-thread)))))
     (decrement-recycling-taskmaster-parallel-acceptor-handling-thread-count taskmaster)))
 
+(defun wake-acceptor-for-shutdown-using-listen-socket (listen-socket)
+  "Works like `hunchentoot::wake-acceptor-for-shutdown', except 
+ takes the listen socket as an argument and utilize `usocket:socket-shutdown'."
+  (multiple-value-bind (address port) (usocket:get-local-name listen-socket)
+    (let ((conn (usocket:socket-connect
+                 (cond
+                   ((and (= (length address) 4) (zerop (elt address 0)))
+                    #(127 0 0 1))
+                   ((and (= (length address) 16)
+                         (every #'zerop address))
+                    #(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1))
+                   (t address))
+                 port)))
+      ;; Use `socket-shutdown' not to block on reading this socket from the server side.
+      (usocket:socket-shutdown conn :io)
+      (usocket:socket-close conn))))
+
 (defmethod hunchentoot:shutdown ((taskmaster recycling-taskmaster))
   "Saying every workers to shutdown."
   ;; 1. Sets a flag saying "end itself" to the worker threads.
@@ -228,10 +245,14 @@ Thread states:
   ;; Even when I `change-class'ed it, Allegro CL does not permit also.
   (loop
     with acceptor = (hunchentoot:taskmaster-acceptor taskmaster)
-      initially (unless (hunchentoot::acceptor-listen-socket acceptor)
+    with listen-socket = (hunchentoot::acceptor-listen-socket acceptor)
+      initially (unless listen-socket
                   (return-from hunchentoot:shutdown nil))
     repeat (recycling-taskmaster-parallel-acceptor-thread-count taskmaster)
-    do (hunchentoot::wake-acceptor-for-shutdown acceptor))
+    do (handler-case
+           (wake-acceptor-for-shutdown-using-listen-socket listen-socket)
+         (error (e)
+           (hunchentoot::acceptor-log-message acceptor :error "Wake-for-shutdown connect failed: ~A" e))))
   (when *soft-shutdown*
     (when (plusp
            (recycling-taskmaster-parallel-acceptor-thread-count-synchronized taskmaster))

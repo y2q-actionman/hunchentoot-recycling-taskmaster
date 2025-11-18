@@ -13,7 +13,7 @@
 
 ;;; parallel-acceptor synchronizes accept(2) on the listen socket, so
 ;;; it requires the socket interface, usocket.  Sadly, this means
-;;; Lispworks cannot be supported because usocket is unused.
+;;; Lispworks cannot be supported because usocket is not used.
 
 (defmethod hunchentoot:stop ((acceptor parallel-acceptor) &key soft)
   "Make SOFT parameter to a special variable to be seen by `hunchentoot:shutdown'"
@@ -21,9 +21,9 @@
     (call-next-method)))
 
 (defmethod hunchentoot:accept-connections ((acceptor parallel-acceptor))
-  "This works like the parental method, except removing some works for
-sharing the listen socket."
-  ;; `usocket:with-server-socket' is not used because it automatically
+  "This works like the parental method, except some works for sharing
+the listen socket."
+  ;; `usocket:with-server-socket' cannot be used because it automatically
   ;; calls close(2) but every parallel-acceptors should not do
   ;; it. close(2) should be called only once, by `hunchentoot:stop'.
   (let ((listener (hunchentoot::acceptor-listen-socket acceptor)))
@@ -45,15 +45,9 @@ sharing the listen socket."
           (hunchentoot:handle-incoming-connection
            (hunchentoot::acceptor-taskmaster acceptor)
            client-connection))))))
-;;; TODO:
-;;; - validate our own `accept-connections' is required not not.
-;;;   I think points fixed above may not be strictly required.
-;;; - By the way, above changes may be exported to the original
-;;;   hunchentoot.
 
 
 (defmethod hunchentoot::acceptor-server-name ((acceptor parallel-acceptor))
-  ;; FIXME: this is unexported!!
   ;; FIXME: a good version string..
   (format nil "Hunchentoot-recycle 0.0.0 (experimental), based on ~A"
           (call-next-method)))
