@@ -119,7 +119,7 @@ Thread states:
         (hunchentoot::condition-variable-signal (recycling-taskmaster-busy-worker-count-queue taskmaster)))
       rest)))
 
-(define-condition end-of-parallel-acceptor-thread (condition)
+(define-condition end-of-parallel-acceptor-thread (error)
   ()
   (:documentation "Thrown when parallel-acceptor-thread ends."))
 
@@ -181,7 +181,7 @@ Thread states:
  accept(2). It processs client-connection by itself and controls how
  many threads working around the process. "
   (when (acceptor-shutdown-p-synchronized (hunchentoot::taskmaster-acceptor taskmaster))
-    (signal 'end-of-parallel-acceptor-thread))
+    (error 'end-of-parallel-acceptor-thread))
   (with-counting-busy-worker (busy-workers) taskmaster
     (let (all-threads accepting-threads)
       (setf all-threads (count-recycling-taskmaster-thread taskmaster)
@@ -196,7 +196,7 @@ Thread states:
       (hunchentoot::handle-incoming-connection% taskmaster client-connection)
       ;; If already shut down, return immediately.
       (when (acceptor-shutdown-p-synchronized (hunchentoot::taskmaster-acceptor taskmaster))
-        (signal 'end-of-parallel-acceptor-thread))
+        (error 'end-of-parallel-acceptor-thread))
       ;; See waiters to determine whether this thread is recyclied or not.
       (setf all-threads (count-recycling-taskmaster-thread taskmaster)
             accepting-threads (- all-threads busy-workers))
@@ -205,7 +205,22 @@ Thread states:
              (plusp accepting-threads)
              ;; and there are enough other threads.
              (< (recycling-taskmaster-initial-thread-count taskmaster) all-threads))
-        (signal 'end-of-parallel-acceptor-thread)))))
+        (error 'end-of-parallel-acceptor-thread)))))
+
+(defmethod delete-recycling-taskmaster-finished-thread (taskmaster)
+  "Delete dead threads kept in TASKMASTER accidentally."
+  (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
+    (loop
+      with table = (hunchentoot::acceptor-process taskmaster)
+      for thread being the hash-key of (hunchentoot::acceptor-process taskmaster)
+      unless (bt:thread-alive-p thread)
+        count it into deleted-cnt
+        and do (remhash thread table)
+      finally
+         (when (and (plusp deleted-cnt)
+                    (<= (hash-table-count table) 0))
+           (hunchentoot::condition-variable-signal (recycling-taskmaster-shutdown-queue taskmaster)))
+         (return deleted-cnt))))
 
 (defun wake-acceptor-for-shutdown-using-listen-socket (listen-socket)
   "Works like `hunchentoot::wake-acceptor-for-shutdown', except 
@@ -235,6 +250,7 @@ Thread states:
       (hunchentoot::condition-variable-wait
        (recycling-taskmaster-busy-worker-count-queue taskmaster)
        (recycling-taskmaster-busy-worker-count-lock taskmaster))))
+  (delete-recycling-taskmaster-finished-thread taskmaster)
   ;; 3. Wakes every threads waiting the listen socket, using
   ;; `wake-acceptor-for-shutdown-using-listen-socket'
   ;; 
