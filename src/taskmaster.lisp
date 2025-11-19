@@ -29,12 +29,17 @@
     :initarg :max-worker-count
     :initform *default-max-worker-count*
     :accessor recycling-taskmaster-max-worker-count
-    :documentation 
-    "The number of how many workers may be created at peak. If this
-exceeds `hunchentoot:taskmaster-max-thread-count' or
-`hunchentoot:taskmaster-max-accept-count', exceeded workers behave
+    :documentation
+    "Limits the number of how many threads may be created at peak to
+ this value.
+
+ If this exceeds `hunchentoot:taskmaster-max-thread-count' or
+`hunchentoot:taskmaster-max-accept-count', exceeded threads behave
 like the original hunchentoot.  If this is NIL, there is no limit
-except hunchentoot's limits by above variables. ")
+except hunchentoot's limits by above variables.
+
+This parameter is just for benchmarking and comparing with other
+thread-pooling servers.")
    (busy-thread-count
     :type integer
     :initform 0
