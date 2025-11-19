@@ -102,9 +102,11 @@ Thread states:
         (hunchentoot::condition-variable-signal (recycling-taskmaster-shutdown-queue taskmaster)))
       deleted?)))
 
-(defmethod count-recycling-taskmaster-thread (taskmaster)
-  (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
-    (hash-table-count (hunchentoot::acceptor-process taskmaster))))
+(defmethod count-recycling-taskmaster-thread (taskmaster &key (lock t))
+  (if lock
+      (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
+        (hash-table-count (hunchentoot::acceptor-process taskmaster)))
+      (hash-table-count (hunchentoot::acceptor-process taskmaster))))
 
 (defmethod increment-recycling-taskmaster-busy-worker-count ((taskmaster recycling-taskmaster))
   (hunchentoot::with-lock-held ((recycling-taskmaster-busy-worker-count-lock taskmaster))
