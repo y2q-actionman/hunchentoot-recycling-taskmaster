@@ -1,7 +1,7 @@
 (in-package #:hunchentoot-recycle)
 
-(defvar *default-initial-thread-count* 2)
-(defvar *default-max-worker-count* 8)
+(defvar *default-initial-thread-count* 4)
+(defvar *default-max-worker-count* nil)
 
 (defclass recycling-taskmaster (hunchentoot:one-thread-per-connection-taskmaster)
   ((hunchentoot::acceptor-process       ; overwrites
