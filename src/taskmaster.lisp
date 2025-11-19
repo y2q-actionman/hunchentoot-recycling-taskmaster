@@ -1,7 +1,6 @@
 (in-package #:hunchentoot-recycle)
 
 (defvar *default-initial-thread-count* 4)
-(defvar *default-max-worker-count* nil)
 
 (defclass recycling-taskmaster (hunchentoot:one-thread-per-connection-taskmaster)
   ((hunchentoot::acceptor-process       ; overwrites
@@ -24,28 +23,24 @@
     :accessor recycling-taskmaster-initial-thread-count
     :documentation 
     "The number of how many threads created at first or off-peak.")
-   (max-worker-count
-    :type (or null integer) 
-    :initarg :max-worker-count
-    :initform *default-max-worker-count*
-    :accessor recycling-taskmaster-max-worker-count
-    :documentation
-    "Limits the number of how many threads may be created at peak to
- this value.
-
- If this exceeds `hunchentoot:taskmaster-max-thread-count' or
-`hunchentoot:taskmaster-max-accept-count', exceeded threads behave
-like the original hunchentoot.  If this is NIL, there is no limit
-except hunchentoot's limits by above variables.
-
-This parameter is just for benchmarking and comparing with other
-thread-pooling servers.")
    (busy-thread-count
     :type integer
     :initform 0
     :accessor recycling-taskmaster-busy-thread-count
     :documentation
-    "The number of threads working on `hunchentoot:handle-incoming-connection'.")
+    "The number of threads working on `hunchentoot:handle-incoming-connection'.
+
+Thread states:
+ - Waiting on the listen socket.
+   In `hunchentoot:accept-connections', out of `hunchentoot:handle-incoming-connection'.
+
+- Checking thread numbers.
+  In our `hunchentoot:handle-incoming-connection', out of `hunchentoot:handle-incoming-connection%'.
+  Counted by this`busy-thread-count'.
+
+- Handling client connections
+  In `hunchentoot:handle-incoming-connection%'.
+  Counted by hunchentoot's original slots.")
    (busy-thread-count-lock
     :initform (hunchentoot::make-lock "recycling-taskmaster-busy-thread-count-lock")
     :reader recycling-taskmaster-busy-thread-count-lock
@@ -56,36 +51,22 @@ thread-pooling servers.")
     :reader recycling-taskmaster-busy-thread-count-queue
     :documentation
     "A condition variable to wait for the ends of client connections, locked by busy-thread-count-lock."))
-  (:documentation "(stub)
+  (:documentation "A taskmaster works like
+`hunchentoot:one-thread-per-connection-taskmaster' except recycing a
+thread when there is a pending connecton.
 
-Thread states:
-- :accepting
-  Waiting on the listen socket.
-  (in `hunchentoot:accept-connections', out of `hunchentoot:handle-incoming-connection').
+MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
+`hunchentoot:one-thread-per-connection-taskmaster'."))
 
-- :housekeeping
-  Checking thread numbers.
-  (in `hunchentoot:handle-incoming-connection', out of `hunchentoot:handle-incoming-connection%').
-  Counted by `parallel-acceptor-handling-thread-count', but not by hunchentoot's counters.
-
-- :handling-request
-  Handling connection
-  (in `hunchentoot:handle-incoming-connection%').
-  Counted by hunchentoot's original slots,`hunchentoot::thread-count' and `hunchentoot::accept-count'.
-"))
 
 (defmethod cl:initialize-instance :after ((taskmaster recycling-taskmaster) &rest init-args)
   "If INITIAL-THREAD-COUNT is supplied, ensure it is equal or less than other count parameters."
   (declare (ignore init-args))
   (with-accessors ((initial recycling-taskmaster-initial-thread-count)
-                   (max-worker-count recycling-taskmaster-max-worker-count)
                    (max-thread-count hunchentoot:taskmaster-max-thread-count)
                    (max-accept-count hunchentoot:taskmaster-max-accept-count))
       taskmaster
     (check-type initial integer)
-    (when (and max-worker-count
-               (not (<= initial max-worker-count)))
-      (hunchentoot:parameter-error "INITIAL-THREAD-COUNT must be equal or less than MAX-WORKER-COUNT"))
     (when (and max-thread-count
                (not (<= initial max-thread-count)))
       (hunchentoot:parameter-error "INITIAL-THREAD-COUNT must be equal or less than MAX-THREAD-COUNT"))
@@ -192,10 +173,7 @@ Thread states:
       (setf all-threads (count-recycling-taskmaster-thread taskmaster)
             accepting-threads (- all-threads busy-threads))
       ;; Makes a thread if all threads are busy.
-      (when (and (<= accepting-threads 0)
-                 (if-let ((max-worker (recycling-taskmaster-max-worker-count taskmaster)))
-                   (< all-threads max-worker)
-                   t)) 
+      (when (<= accepting-threads 0) 
         (make-parallel-acceptor-thread taskmaster))
       ;; process the connection by itself.
       (hunchentoot::handle-incoming-connection% taskmaster client-connection)
