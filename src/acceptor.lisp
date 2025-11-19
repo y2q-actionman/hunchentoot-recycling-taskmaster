@@ -23,7 +23,7 @@ the listen socket."
   (let ((taskmaster (hunchentoot::acceptor-taskmaster acceptor)))
     (hunchentoot:shutdown taskmaster)
     (when soft
-      ;; Wait for all worker ends. This includes waiting for
+      ;; Wait for all thread end. This includes waiting for
       ;; `hunchentoot::acceptor-shutdown-queue' done by
       ;; original `hunchentoot:stop'.
       (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
