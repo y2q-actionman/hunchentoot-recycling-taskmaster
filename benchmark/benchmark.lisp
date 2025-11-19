@@ -51,9 +51,9 @@
 (defparameter *cl-tbnl-gserver-tmgr-default-thread-count*
   cl-tbnl-gserver-tmgr.tmgr::*gserver-tmgr-poolsize*)
 
-(defun bench-cl-tbnl-gserver-tmgr ()
+(defun bench-cl-tbnl-gserver-tmgr (&optional (threads-list '(4 8 16)))
   (loop
-    for threads in '(4 8 16)
+    for threads in threads-list
     as logname = (format nil "cl-tbnl-gserver-tmgr_threads-~D~@[-default~*~].log"
                          threads (eql threads *cl-tbnl-gserver-tmgr-default-thread-count*))
     as server = (make-instance 'hunchentoot:easy-acceptor
@@ -73,9 +73,9 @@
 (defparameter *hunchentoot-recycle-default-thread-count*
   hunchentoot-recycle::*default-initial-thread-count*)
 
-(defun bench-hunchentoot-recycle ()
+(defun bench-hunchentoot-recycle (&optional (threads-list '(4 8 16)))
   (loop
-    for threads in '(4 8 16)
+    for threads in threads-list
     as logname = (format nil "hunchentoot-recycle_threads-~A~@[-default~*~].log"
                          threads
                          (eql threads *cl-tbnl-gserver-tmgr-default-thread-count*))
