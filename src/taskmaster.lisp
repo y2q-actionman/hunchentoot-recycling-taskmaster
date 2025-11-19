@@ -188,12 +188,6 @@ Thread states:
       (when (and (<= accepting-threads 0)
                  (if-let ((max-worker (recycling-taskmaster-max-worker-count taskmaster)))
                    (< all-threads max-worker)
-                   t)
-                 (if-let ((max-thread (hunchentoot:taskmaster-max-thread-count taskmaster)))
-                   (< all-threads max-thread)
-                   t)
-                 (if-let ((max-accept (hunchentoot:taskmaster-max-accept-count taskmaster)))
-                   (< all-threads max-accept)
                    t)) 
         (make-parallel-acceptor-thread taskmaster))
       ;; process the connection by itself.
