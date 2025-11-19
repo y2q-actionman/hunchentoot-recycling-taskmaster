@@ -225,7 +225,7 @@ Thread states:
          (when (and (plusp deleted-cnt)
                     (<= (hash-table-count table) 0))
            (hunchentoot::condition-variable-signal (recycling-taskmaster-shutdown-queue taskmaster)))
-         (return deleted-cnt))))
+         (return (plusp deleted-cnt)))))
 
 (defun wake-acceptor-for-shutdown-using-listen-socket (listen-socket)
   "Works like `hunchentoot::wake-acceptor-for-shutdown', except 
@@ -255,7 +255,6 @@ Thread states:
       (hunchentoot::condition-variable-wait
        (recycling-taskmaster-busy-thread-count-queue taskmaster)
        (recycling-taskmaster-busy-thread-count-lock taskmaster))))
-  (delete-recycling-taskmaster-finished-thread taskmaster)
   ;; 3. Wakes every threads waiting the listen socket, using
   ;; `wake-acceptor-for-shutdown-using-listen-socket'
   ;; 
@@ -268,11 +267,12 @@ Thread states:
     with listen-socket = (hunchentoot::acceptor-listen-socket acceptor)
       initially (unless listen-socket
                   (return-from hunchentoot:shutdown nil))
-    repeat (count-recycling-taskmaster-thread taskmaster)
-    do (handler-case
-           (wake-acceptor-for-shutdown-using-listen-socket listen-socket)
-         (error (e)
-           (hunchentoot::acceptor-log-message acceptor :error "Wake-for-shutdown connect failed: ~A" e)))))
+    while (plusp (count-recycling-taskmaster-thread taskmaster))
+    do (or (delete-recycling-taskmaster-finished-thread taskmaster)
+           (handler-case
+               (wake-acceptor-for-shutdown-using-listen-socket listen-socket)
+             (error (e)
+               (hunchentoot::acceptor-log-message acceptor :error "Wake-for-shutdown connect failed: ~A" e))))))
 
 (defmethod wait-for-recycling-taskmaster-shutdown (taskmaster)
   (hunchentoot::condition-variable-wait
