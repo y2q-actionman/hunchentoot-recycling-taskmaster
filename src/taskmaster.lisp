@@ -261,6 +261,3 @@ Thread states:
   ;; See `make-parallel-acceptor-thread' instead.
   (declare (ignore client-connection))
   (error "This method is not implemented for recycling-taskmaster."))
-
-;;; Counters are same with hunchentoot, currently. (until I implement a new strategy)
-;;; TODO: use atomic-incf / atomic-decf
