@@ -284,3 +284,18 @@ Thread states:
   ;; See `make-parallel-acceptor-thread' instead.
   (declare (ignore client-connection))
   (error "This method is not implemented for recycling-taskmaster."))
+
+(defmethod abandon-taskmaster ((taskmaster recycling-taskmaster))
+  "Abandon all threads kept in TASKMASTER. This is a last resort
+ for handling corrupted taskmaster objects."
+  ;; see the table without locking intentionally.
+  (let* ((table (hunchentoot::acceptor-process taskmaster))
+         (thread-list (hash-table-keys table)))
+    (loop for thread in thread-list
+          do (typecase thread
+               (bt2:thread
+                (bt2:error-in-thread thread 'end-of-parallel-acceptor-thread))
+               (otherwise
+                (bt:interrupt-thread thread (lambda () (error 'end-of-parallel-acceptor-thread)))))
+          if (remove-recycling-taskmaster-thread taskmaster thread)
+            count it)))

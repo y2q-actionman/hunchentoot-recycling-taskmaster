@@ -65,6 +65,19 @@ the listen socket."
   (format nil "Hunchentoot-recycle 0.0.0 (experimental), based on ~A"
           (call-next-method)))
 
+(defmethod kill ((acceptor parallel-acceptor))
+  "To force an end of ACCEPTOR, destroy all threads and the listen
+ socket *without* locking.  This function should not be called in
+ production (but required for my debugging)."
+  (with-accessors ((shutdown-p hunchentoot::acceptor-shutdown-p)
+                   (listen-socket hunchentoot::acceptor-listen-socket))
+      acceptor
+    (setf shutdown-p t)
+    (when listen-socket
+      (ignore-errors
+       (usocket:socket-close listen-socket))
+      (setf listen-socket nil)))
+  (abandon-taskmaster (hunchentoot::acceptor-taskmaster acceptor)))
 
 ;;; Derived classes
 (defclass parallel-ssl-acceptor (parallel-acceptor hunchentoot:ssl-acceptor)

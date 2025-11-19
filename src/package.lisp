@@ -7,4 +7,5 @@
    #:parallel-acceptor
    #:parallel-easy-acceptor
    #:parallel-ssl-acceptor
-   #:parallel-easy-ssl-acceptor))
+   #:parallel-easy-ssl-acceptor
+   #:kill))
