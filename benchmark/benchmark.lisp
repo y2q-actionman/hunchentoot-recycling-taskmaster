@@ -52,11 +52,11 @@
              (terpri)
              (finish-output)))
       (run-tcd 4 100 t)
-      ;; (run-tcd 4 100 nil)
+      (run-tcd 4 100 nil)
       (run-tcd 4 10 t)
-      ;; (run-tcd 4 10 nil)
+      (run-tcd 4 10 nil)
       (run-tcd 16 400 t)
-      ;; (run-tcd 16 400 nil)
+      (run-tcd 16 400 nil)
       )))
 
 ;;; Hunchentoot and variant
@@ -114,6 +114,25 @@
     as taskmaster = (make-instance 'hunchentoot-recycle:recycling-taskmaster
                                    :initial-thread-count threads)
     as server = (make-instance 'hunchentoot-recycle:parallel-easy-acceptor
+                               :message-log-destination nil
+                               :access-log-destination nil
+                               :port 4242
+                               :taskmaster taskmaster)
+    collect server
+    do (hunchentoot:start server)
+       (unwind-protect
+            (run-wrk "http://localhost:4242/yo" logname)
+         (hunchentoot:stop server :soft t))))
+
+(defun bench-hunchentoot-recycle-atomic (&optional (threads-list '(8)))
+  (loop
+    for threads in threads-list
+    as logname = (format nil "hunchentoot-recycle-atomic_threads-~A~@[-default~*~].log"
+                         threads
+                         (eql threads *hunchentoot-recycle-default-thread-count*))
+    as taskmaster = (make-instance 'hunchentoot-recycle:atomic-recycling-taskmaster
+                                   :initial-thread-count threads)
+    as server = (make-instance 'hunchentoot-recycle:atomic-parallel-easy-acceptor
                                :message-log-destination nil
                                :access-log-destination nil
                                :port 4242
@@ -215,7 +234,10 @@
 (trace run-wrk)
 (defun bench-all ()
   (bench-hunchentoot)
+  (bench-hunchentoot-atomic-taskmaster)
+  (bench-hunchentoot-atomic-all)
   (bench-hunchentoot-recycle (list 8 *nproc*))
+  (bench-hunchentoot-recycle-atomic (list 8 *nproc*))
   (bench-cl-tbnl-gserver-tmgr (list 8 *nproc*))
   (bench-quux-hunchentoot)
   (bench-wookie)

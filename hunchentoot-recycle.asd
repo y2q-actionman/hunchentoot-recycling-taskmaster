@@ -8,5 +8,6 @@
   :components ((:file "package")
                (:file "atomic")
                (:file "taskmaster")
-               (:file "acceptor"))
+               (:file "acceptor")
+               (:file "atomic-recycling"))
   :in-order-to ((test-op (test-op #:hunchentoot-recycle-test))))

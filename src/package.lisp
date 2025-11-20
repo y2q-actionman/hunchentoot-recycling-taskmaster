@@ -14,4 +14,9 @@
    #:atomic-acceptor
    #:atomic-ssl-acceptor
    #:atomic-easy-acceptor
-   #:atomic-easy-ssl-acceptor))
+   #:atomic-easy-ssl-acceptor
+   #:atomic-parallel-ssl-acceptor
+   #:atomic-parallel-easy-acceptor
+   #:atomic-parallel-easy-ssl-acceptor
+   #:atomic-recycling-taskmaster
+   #:atomic-parallel-acceptor))
