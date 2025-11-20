@@ -109,11 +109,6 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
   ()
   (:documentation "Thrown when parallel-acceptor-thread ends."))
 
-(defmethod acceptor-shutdown-p-synchronized (acceptor)
-  (hunchentoot::with-lock-held
-      ((hunchentoot::acceptor-shutdown-lock acceptor))
-    (hunchentoot::acceptor-shutdown-p acceptor)))
-
 (defmethod make-parallel-acceptor-thread ((taskmaster recycling-taskmaster))
   "Makes a new thread for `parallel-acceptor'."
   (let* ((acceptor (hunchentoot:taskmaster-acceptor taskmaster))
@@ -129,7 +124,9 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
                   (error
                     (lambda (&optional e)
                       (when (and
-                             (acceptor-shutdown-p-synchronized acceptor)
+                             (hunchentoot::with-lock-held
+                                 ((hunchentoot::acceptor-shutdown-lock acceptor))
+                               (hunchentoot::acceptor-shutdown-p acceptor))
                              (let ((sock (hunchentoot::acceptor-listen-socket acceptor)))
                                (or (null sock) ; may be nil if already closed.
                                    (not (open-stream-p sock)))))
@@ -172,8 +169,12 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
  in the loop of `hunchentoot:accept-connections' on every
  accept(2). It processs client-connection by itself and controls how
  many threads working around the process. "
-  (when (acceptor-shutdown-p-synchronized (hunchentoot::taskmaster-acceptor taskmaster))
-    (error 'end-of-parallel-acceptor-thread))
+  ;; If already shut down, return immediately.
+  (when (hunchentoot::acceptor-shutdown-p (hunchentoot::taskmaster-acceptor taskmaster))
+    (usocket:socket-close client-connection)
+    ;; Goes up to the loop of `hunchentoot:accept-connections' to
+    ;; check shutdown-p with locking again.
+    (return-from hunchentoot:handle-incoming-connection))
   (with-counting-busy-thread (busy-threads) taskmaster
     (let (all-threads accepting-threads)
       (setf all-threads (count-recycling-taskmaster-thread taskmaster)
@@ -183,9 +184,9 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
         (make-parallel-acceptor-thread taskmaster))
       ;; process the connection by itself.
       (hunchentoot::handle-incoming-connection% taskmaster client-connection)
-      ;; If already shut down, return immediately.
-      (when (acceptor-shutdown-p-synchronized (hunchentoot::taskmaster-acceptor taskmaster))
-        (error 'end-of-parallel-acceptor-thread))
+      ;; If shut-down while processing CLIENT-CONNECTION, return immediately.
+      (when (hunchentoot::acceptor-shutdown-p (hunchentoot::taskmaster-acceptor taskmaster))
+        (return-from hunchentoot:handle-incoming-connection))
       ;; See waiters to determine whether this thread is recyclied or not.
       (setf all-threads (count-recycling-taskmaster-thread taskmaster)
             accepting-threads (- all-threads busy-threads))
