@@ -15,6 +15,10 @@
 ;;; it requires the socket interface, usocket.  Sadly, this means
 ;;; Lispworks cannot be supported because usocket is not used.
 
+(defmethod hunchentoot:start :before ((acceptor parallel-acceptor))
+  (check-type (hunchentoot::acceptor-taskmaster acceptor)
+              hunchentoot-recycle:recycling-taskmaster))
+
 (defmethod hunchentoot:stop ((acceptor parallel-acceptor) &key soft)
   "This works like the parental method, except some works for sharing
 the listen socket."

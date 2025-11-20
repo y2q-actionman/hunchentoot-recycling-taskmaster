@@ -146,6 +146,12 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
       (let ((thread (hunchentoot:start-thread taskmaster #'thunk :name name)))
         (add-recycling-taskmaster-thread taskmaster thread)))))
 
+(defmethod hunchentoot:execute-acceptor :before ((taskmaster recycling-taskmaster))
+  "Checks the type of ACCEPTOR slot, because recycling-taskmaster needs
+ a crafted `hunchentoot:accept-connections' not using `usocket:with-server-socket'."
+  (check-type (hunchentoot::taskmaster-acceptor taskmaster)
+              hunchentoot-recycle:parallel-acceptor))
+
 (defmethod hunchentoot:execute-acceptor ((taskmaster recycling-taskmaster))
   "Make initial threads working on `parallel-acceptor'."
   (loop repeat (recycling-taskmaster-initial-thread-count taskmaster)

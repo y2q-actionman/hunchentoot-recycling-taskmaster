@@ -11,11 +11,8 @@
 ;;; Start
 
 (defparameter *test-server*
-  (let* ((taskmaster
-      	   (make-instance 'hunchentoot-recycle:recycling-taskmaster))
-         (acceptor (make-instance 'hunchentoot-recycle:parallel-easy-acceptor
-                                  :port 4242
-                                  :taskmaster taskmaster)))
+  (let* ((acceptor (make-instance 'hunchentoot-recycle:parallel-easy-acceptor
+                                  :port 4242)))
     (hunchentoot:start acceptor)))
 
 ; See "http://127.0.0.1:4242/yo" or "http://127.0.0.1:4242/yo?name=Dude" .
