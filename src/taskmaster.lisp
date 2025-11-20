@@ -11,20 +11,11 @@
     :initform (hunchentoot::make-lock "recycling-taskmaster-acceptor-process-lock")
     :reader recycling-taskmaster-acceptor-process-lock
     :documentation "A lock for protecting acceptor-process slot.")
-   (thread-count
-    :initform (bt2:make-atomic-integer)
-    :reader recycling-taskmaster-thread-count
-    :documentation "The number of how many threads running. This is same with the number of keys in acceptor-process slot, but splited to avoid locking.")
    (shutdown-queue
     :initform (hunchentoot::make-condition-variable)
     :reader recycling-taskmaster-shutdown-queue
     :documentation
-    "A condition variable to wait for all threads end, locked by shutdown-queue-lock")
-   (shutdown-queue-lock
-    :initform (hunchentoot::make-lock "shutdown-queue-lock")
-    :reader recycling-taskmaster-shutdown-queue-lock
-    :documentation
-    "A lock for protecting shutdown-queue.")
+    "A condition variable to wait for all threads end, locked by acceptor-process-lock.")
    (initial-thread-count
     :type integer
     :initarg :initial-thread-count
@@ -86,22 +77,22 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
 (defmethod add-recycling-taskmaster-thread (taskmaster thread)
   (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
     (let ((table (hunchentoot::acceptor-process taskmaster)))
-      (setf (gethash thread table) t)))
-  (bt2:atomic-integer-incf (recycling-taskmaster-thread-count taskmaster)))
+      (setf (gethash thread table) t))))
 
 (defmethod remove-recycling-taskmaster-thread (taskmaster thread)
   (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
-    (let* ((table (hunchentoot::acceptor-process taskmaster)))
-      (remhash thread table)))
-  (let ((rest (bt2:atomic-integer-decf (recycling-taskmaster-thread-count taskmaster))))
-    (when (<= rest 0)
-      (hunchentoot::with-lock-held ((recycling-taskmaster-shutdown-queue-lock taskmaster))
-        (when (<= (bt2:atomic-integer-value (recycling-taskmaster-thread-count taskmaster)) 0)
-          (hunchentoot::condition-variable-signal (recycling-taskmaster-shutdown-queue taskmaster)))))
-    rest))
+    (let* ((table (hunchentoot::acceptor-process taskmaster))
+           (deleted? (remhash thread table)))
+      (when (and deleted?
+                 (<= (hash-table-count table) 0))
+        (hunchentoot::condition-variable-signal (recycling-taskmaster-shutdown-queue taskmaster)))
+      deleted?)))
 
-(defmethod count-recycling-taskmaster-thread (taskmaster &key)
-  (bt2:atomic-integer-value (recycling-taskmaster-thread-count taskmaster)))
+(defmethod count-recycling-taskmaster-thread (taskmaster &key (lock t))
+  (if lock
+      (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
+        (hash-table-count (hunchentoot::acceptor-process taskmaster)))
+      (hash-table-count (hunchentoot::acceptor-process taskmaster))))
 
 (defmethod increment-recycling-taskmaster-busy-thread-count ((taskmaster recycling-taskmaster))
   (bt2:atomic-integer-incf (recycling-taskmaster-busy-thread-count taskmaster)))
@@ -208,23 +199,18 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
 
 (defmethod delete-recycling-taskmaster-finished-thread (taskmaster)
   "Delete dead threads kept in TASKMASTER accidentally."
-  (let ((deleted-cnt 0))
-    (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
-      (loop
-        with table = (hunchentoot::acceptor-process taskmaster)
-        for thread being the hash-key of (hunchentoot::acceptor-process taskmaster)
-        unless (bt:thread-alive-p thread)
-          do (incf deleted-cnt)
-          and do (remhash thread table)))
-    (when (plusp deleted-cnt)
-      (let ((rest (bt2:atomic-integer-decf (recycling-taskmaster-thread-count taskmaster)
-                                           deleted-cnt)))
-        (when (<= rest 0)
-          (hunchentoot::with-lock-held ((recycling-taskmaster-shutdown-queue-lock taskmaster))
-            (when (<= (count-recycling-taskmaster-thread taskmaster) 0)
-              (hunchentoot::condition-variable-signal
-               (recycling-taskmaster-shutdown-queue taskmaster)))))))
-    (plusp deleted-cnt)))
+  (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
+    (loop
+      with table = (hunchentoot::acceptor-process taskmaster)
+      for thread being the hash-key of (hunchentoot::acceptor-process taskmaster)
+      unless (bt:thread-alive-p thread)
+        count it into deleted-cnt
+        and do (remhash thread table)
+      finally
+         (when (and (plusp deleted-cnt)
+                    (<= (hash-table-count table) 0))
+           (hunchentoot::condition-variable-signal (recycling-taskmaster-shutdown-queue taskmaster)))
+         (return (plusp deleted-cnt)))))
 
 (defun wake-acceptor-for-shutdown-using-listen-socket (listen-socket)
   "Works like `hunchentoot::wake-acceptor-for-shutdown', except 
@@ -275,12 +261,11 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
                (hunchentoot::acceptor-log-message acceptor :error "Wake-for-shutdown connect failed: ~A" e))))))
 
 (defmethod wait-for-recycling-taskmaster-shutdown (taskmaster)
-  (when (plusp (count-recycling-taskmaster-thread taskmaster))
-    (hunchentoot::with-lock-held ((recycling-taskmaster-shutdown-queue-lock taskmaster))
-      (when (plusp (count-recycling-taskmaster-thread taskmaster))
-        (hunchentoot::condition-variable-wait
-         (recycling-taskmaster-shutdown-queue taskmaster)
-         (recycling-taskmaster-shutdown-queue-lock taskmaster))))))
+  (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
+    (when (plusp (count-recycling-taskmaster-thread taskmaster :lock nil))
+      (hunchentoot::condition-variable-wait
+       (recycling-taskmaster-shutdown-queue taskmaster)
+       (recycling-taskmaster-acceptor-process-lock taskmaster)))))
 
 (defmethod hunchentoot:create-request-handler-thread ((taskmaster recycling-taskmaster) client-connection)
   "This method is never called for `recycling-taskmaster'."
