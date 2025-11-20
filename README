@@ -12,7 +12,7 @@ _______
 TODO:
 
 - make a small hacked version of one-thread-per-connection-taskmaster,
-  just taking an advantage of atimic operators of bordeaux-threads.
+  just taking an advantage of atomic operators of bordeaux-threads.
 
 - to do it:
   1. try use atomic-ops at the constructor.
