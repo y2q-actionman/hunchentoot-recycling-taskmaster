@@ -5,7 +5,31 @@
 (ql:quickload "hunchentoot-recycle")
 (ql:quickload "quux-hunchentoot")
 
+(ql:quickload "wookie")
+;;; sudo apt install libuv1-dev
 ;;;
+;;; [package cl-async-ssl]
+;;; Unable to load any of the alternatives:
+;;;    ("libcrypto.so.1.1" "libcrypto.so.1.0.2" "libcrypto.so")
+;;;    [Condition of type CFFI:LOAD-FOREIGN-LIBRARY-ERROR]
+;;;
+;;; sudo apt install libssl-dev
+
+(ql:quickload "woo")
+;;; sudo apt install libev-dev
+;;; https://lisp-journey.gitlab.io/blog/why-turtl-switched-from-lisp-to-js/
+
+(ql:quickload "house")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun nproc ()
+  (let ((nproc-str
+          (with-output-to-string (*standard-output*)
+            (uiop:run-program "nproc" :output t))))
+    (parse-integer nproc-str)))
+
+(defparameter *nproc* (nproc))
 
 (defparameter *wrk-duration* 10)
 
@@ -111,11 +135,64 @@
       (hunchentoot:stop server :soft t))
     server))
 
+;;; Wookie
+
+(defun bench-wookie ()
+  (let ((server-thread
+          (bt:make-thread
+           #'wookie-helper:start-static-server ; I found it in wookie-helper package.
+           :name "Wookie server thread")))
+    (sleep 1)                           ; wait for starting
+    (unwind-protect
+         (run-wrk "http://localhost:8080" "wookie_default.log")
+      (bt:destroy-thread server-thread))
+    server-thread))
+
+;;; Woo
+
+(defun bench-woo (&optional (threads-list '(nil)))
+  (loop
+    for threads in threads-list
+    as logname = (format nil "woo_threads-~D~@[-default~*~].log"
+                         threads (eql threads nil))
+    as thunk = (lambda ()
+                 ;; from README
+                 (woo:run
+                  (lambda (env)
+                    (declare (ignore env))
+                    '(200 (:content-type "text/plain") ("Hello, World")))
+                  :worker-num threads))
+    as server-thread = (bt:make-thread
+                        thunk :name (format nil "Woo server thread ~A" threads))
+    collect server-thread
+    do (sleep 1)                           ; wait for starting
+       (unwind-protect
+            (run-wrk "http://localhost:5000" logname)
+         (bt:destroy-thread server-thread))))
+
+;;; House
+
+(house:define-handler (hello-world :content-type "text/plain") ()
+  "Hello world!")
+
+(defun bench-house ()
+  (let ((server-thread
+          (bt:make-thread
+           (lambda () (house:start 4040))
+           :name "House server thread")))
+    (sleep 1)                           ; wait for starting
+    (unwind-protect
+         (run-wrk "http://localhost:4040" "house_default.log")
+      (bt:destroy-thread server-thread))
+    server-thread))
 
 ;;; for repl
 (trace run-wrk)
 (defun bench-all ()
   (bench-hunchentoot)
-  (bench-cl-tbnl-gserver-tmgr '(4 8 16))
-  (bench-hunchentoot-recycle '(4 8 16))
-  (bench-quux-hunchentoot))
+  (bench-cl-tbnl-gserver-tmgr (list 8 *nproc*))
+  (bench-hunchentoot-recycle (list 8 *nproc*))
+  (bench-quux-hunchentoot)
+  (bench-wookie)
+  (bench-woo '(nil 2 4))
+  (bench-house))
