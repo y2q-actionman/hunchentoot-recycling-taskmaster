@@ -1,6 +1,56 @@
 (in-package #:hunchentoot-recycle)
 
+;;; Broken?
 (defclass atomic-recycling-taskmaster (recycling-taskmaster atomic-taskmaster)
+  ())
+
+(defclass atomic-parallel-acceptor (parallel-acceptor atomic-acceptor)
+  ()
+  #+ ()
+  (:default-initargs
+   :taskmaster (make-instance 'atomic-recycling-taskmaster)))
+
+;;; Derived classes
+(defclass atomic-parallel-ssl-acceptor (atomic-parallel-acceptor hunchentoot:ssl-acceptor)
+  ())
+
+(defclass atomic-parallel-easy-acceptor (atomic-parallel-acceptor hunchentoot:easy-acceptor)
+  ())
+
+(defclass atomic-parallel-easy-ssl-acceptor (atomic-parallel-easy-acceptor parallel-ssl-acceptor)
+  ())
+
+;;; only for benchmarking
+
+(defclass nonatomic-recycling-taskmaster (recycling-taskmaster)
+  ((busy-thread-count
+    :initform 0))
+  (:documentation "I found only 'busy-thread-count' slot 
+contributes the benchmark score. This class is only for
+testing it."))
+
+(defmethod increment-recycling-taskmaster-busy-thread-count ((taskmaster nonatomic-recycling-taskmaster))
+  (hunchentoot::with-lock-held ((recycling-taskmaster-busy-thread-count-lock taskmaster))
+    (incf (recycling-taskmaster-busy-thread-count taskmaster))))
+
+(defmethod decrement-recycling-taskmaster-busy-thread-count ((taskmaster nonatomic-recycling-taskmaster))
+  (hunchentoot::with-lock-held ((recycling-taskmaster-busy-thread-count-lock taskmaster))
+    (let ((rest (decf (recycling-taskmaster-busy-thread-count taskmaster))))
+      (when (<= rest 0)
+        (hunchentoot::condition-variable-signal (recycling-taskmaster-busy-thread-count-queue taskmaster)))
+      rest)))
+
+(defmethod wait-end-of-handle-incoming-connection ((taskmaster nonatomic-recycling-taskmaster))
+  "Waits threads in `hunchentoot:handle-incoming-connection' end."
+  (hunchentoot::with-lock-held ((recycling-taskmaster-busy-thread-count-lock taskmaster))
+    (when (plusp (recycling-taskmaster-busy-thread-count taskmaster))
+      (hunchentoot::condition-variable-wait
+       (recycling-taskmaster-busy-thread-count-queue taskmaster)
+       (recycling-taskmaster-busy-thread-count-lock taskmaster)))))
+
+
+;;; Broken?
+(defclass atomic-thread-count-recycling-taskmaster (recycling-taskmaster)
   ((thread-count
     :initform (bt2:make-atomic-integer)
     :reader recycling-taskmaster-thread-count
@@ -11,11 +61,11 @@
     :documentation
     "A lock for protecting shutdown-queue.")))
 
-(defmethod add-recycling-taskmaster-thread ((taskmaster atomic-recycling-taskmaster) thread)
+(defmethod add-recycling-taskmaster-thread ((taskmaster atomic-thread-count-recycling-taskmaster) thread)
   (call-next-method)
   (bt2:atomic-integer-incf (recycling-taskmaster-thread-count taskmaster)))
 
-(defmethod remove-recycling-taskmaster-thread ((taskmaster atomic-recycling-taskmaster) thread)
+(defmethod remove-recycling-taskmaster-thread ((taskmaster atomic-thread-count-recycling-taskmaster) thread)
   (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
     (let* ((table (hunchentoot::acceptor-process taskmaster)))
       (remhash thread table)))
@@ -26,10 +76,10 @@
           (hunchentoot::condition-variable-signal (recycling-taskmaster-shutdown-queue taskmaster)))))
     rest))
 
-(defmethod count-recycling-taskmaster-thread ((taskmaster atomic-recycling-taskmaster) &key)
+(defmethod count-recycling-taskmaster-thread ((taskmaster atomic-thread-count-recycling-taskmaster) &key)
   (bt2:atomic-integer-value (recycling-taskmaster-thread-count taskmaster)))
 
-(defmethod delete-recycling-taskmaster-finished-thread ((taskmaster atomic-recycling-taskmaster))
+(defmethod delete-recycling-taskmaster-finished-thread ((taskmaster atomic-thread-count-recycling-taskmaster))
   "Delete dead threads kept in TASKMASTER accidentally."
   (let ((deleted-cnt 0))
     (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
@@ -49,27 +99,10 @@
                (recycling-taskmaster-shutdown-queue taskmaster)))))))
     (plusp deleted-cnt)))
 
-(defmethod wait-for-recycling-taskmaster-shutdown ((taskmaster atomic-recycling-taskmaster))
+(defmethod wait-for-recycling-taskmaster-shutdown ((taskmaster atomic-thread-count-recycling-taskmaster))
   (when (plusp (count-recycling-taskmaster-thread taskmaster))
     (hunchentoot::with-lock-held ((recycling-taskmaster-shutdown-queue-lock taskmaster))
       (when (plusp (count-recycling-taskmaster-thread taskmaster))
         (hunchentoot::condition-variable-wait
          (recycling-taskmaster-shutdown-queue taskmaster)
          (recycling-taskmaster-shutdown-queue-lock taskmaster))))))
-
-
-(defclass atomic-parallel-acceptor (parallel-acceptor atomic-acceptor)
-  ()
-  (:default-initargs
-   :taskmaster (make-instance 'atomic-recycling-taskmaster)))
-
-
-;;; Derived classes
-(defclass atomic-parallel-ssl-acceptor (atomic-parallel-acceptor hunchentoot:ssl-acceptor)
-  ())
-
-(defclass atomic-parallel-easy-acceptor (atomic-parallel-acceptor hunchentoot:easy-acceptor)
-  ())
-
-(defclass atomic-parallel-easy-ssl-acceptor (atomic-parallel-easy-acceptor parallel-ssl-acceptor)
-  ())

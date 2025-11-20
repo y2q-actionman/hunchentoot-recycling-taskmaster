@@ -24,7 +24,6 @@
     :documentation 
     "The number of how many threads created at first or off-peak.")
    (busy-thread-count
-    :type integer
     :initform (bt2:make-atomic-integer)
     :accessor recycling-taskmaster-busy-thread-count
     :documentation
@@ -197,6 +196,14 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
              (< (recycling-taskmaster-initial-thread-count taskmaster) all-threads))
         (error 'end-of-parallel-acceptor-thread)))))
 
+(defmethod wait-end-of-handle-incoming-connection (taskmaster)
+  (when (plusp (bt2:atomic-integer-value (recycling-taskmaster-busy-thread-count taskmaster)))
+    (hunchentoot::with-lock-held ((recycling-taskmaster-busy-thread-count-lock taskmaster))
+      (when (plusp (bt2:atomic-integer-value (recycling-taskmaster-busy-thread-count taskmaster)))
+        (hunchentoot::condition-variable-wait
+         (recycling-taskmaster-busy-thread-count-queue taskmaster)
+         (recycling-taskmaster-busy-thread-count-lock taskmaster))))))
+
 (defmethod delete-recycling-taskmaster-finished-thread (taskmaster)
   "Delete dead threads kept in TASKMASTER accidentally."
   (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
@@ -235,12 +242,7 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
   ;;    -> done by `hunchentoot:stop' setting `hunchentoot::acceptor-shutdown-p'
   ;;
   ;; 2. Waits threads in `hunchentoot:handle-incoming-connection'.
-  (when (plusp (bt2:atomic-integer-value (recycling-taskmaster-busy-thread-count taskmaster)))
-    (hunchentoot::with-lock-held ((recycling-taskmaster-busy-thread-count-lock taskmaster))
-      (when (plusp (bt2:atomic-integer-value (recycling-taskmaster-busy-thread-count taskmaster)))
-        (hunchentoot::condition-variable-wait
-         (recycling-taskmaster-busy-thread-count-queue taskmaster)
-         (recycling-taskmaster-busy-thread-count-lock taskmaster)))))
+  (wait-end-of-handle-incoming-connection taskmaster)
   ;; 3. Wakes every threads waiting the listen socket, using
   ;; `wake-acceptor-for-shutdown-using-listen-socket'
   ;; 
