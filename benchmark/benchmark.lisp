@@ -14,20 +14,25 @@
     (format t "~A ~A ~A~2%"
             filename  (lisp-implementation-type) (lisp-implementation-version))
     (finish-output)
-    (flet ((run-tcd (thread connection &optional (duration *wrk-duration*))
-             (uiop:run-program (list "wrk"
-                                     "-t" (princ-to-string thread)
-                                     "-c" (princ-to-string connection)
-                                     "-d" (princ-to-string duration)
-                                     host)
-                               :output t)
+    (flet ((run-tcd (thread connection keep-alive &optional (duration *wrk-duration*))
+             (let ((options (list "-t" (princ-to-string thread)
+                                  "-c" (princ-to-string connection)
+                                  "-d" (princ-to-string duration)
+                                  host)))
+               (unless keep-alive
+                 (push "Connection: close" options)
+                 (push "-H" options))
+               (format t "# ~{~A ~^~}~%" options)
+               (finish-output)
+               (uiop:run-program (list* "wrk" options) :output t))
+             (terpri)
              (finish-output)))
-      (run-tcd 4 100)
-      (terpri) (finish-output)
-      (run-tcd 4 10)
-      (terpri) (finish-output)
-      (run-tcd 16 400)
-      (terpri) (finish-output))))
+      (run-tcd 4 100 t)
+      (run-tcd 4 100 nil)
+      (run-tcd 4 10 t)
+      (run-tcd 4 10 nil)
+      (run-tcd 16 400 t)
+      (run-tcd 16 400 nil))))
 
 ;;; Hunchentoot
 
@@ -51,7 +56,7 @@
 (defparameter *cl-tbnl-gserver-tmgr-default-thread-count*
   cl-tbnl-gserver-tmgr.tmgr::*gserver-tmgr-poolsize*)
 
-(defun bench-cl-tbnl-gserver-tmgr (&optional (threads-list '(4 8 16)))
+(defun bench-cl-tbnl-gserver-tmgr (&optional (threads-list '(8)))
   (loop
     for threads in threads-list
     as logname = (format nil "cl-tbnl-gserver-tmgr_threads-~D~@[-default~*~].log"
@@ -73,7 +78,7 @@
 (defparameter *hunchentoot-recycle-default-thread-count*
   hunchentoot-recycle::*default-initial-thread-count*)
 
-(defun bench-hunchentoot-recycle (&optional (threads-list '(4 8 16)))
+(defun bench-hunchentoot-recycle (&optional (threads-list '(8)))
   (loop
     for threads in threads-list
     as logname = (format nil "hunchentoot-recycle_threads-~A~@[-default~*~].log"
@@ -92,10 +97,25 @@
             (run-wrk "http://localhost:4242/yo" logname)
          (hunchentoot:stop server :soft t))))
 
+;;; quux-hunchentoot
+
+(defun bench-quux-hunchentoot ()
+  (let ((server (make-instance 'hunchentoot:easy-acceptor
+                               :message-log-destination nil
+                               :access-log-destination nil
+                               :port 4242
+                               :taskmaster (make-instance 'quux-hunchentoot:thread-pooling-taskmaster))))
+    (hunchentoot:start server)
+    (unwind-protect
+         (run-wrk "http://localhost:4242/yo" "quux-hunchentoot_default.log")
+      (hunchentoot:stop server :soft t))
+    server))
+
 
 ;;; for repl
 (trace run-wrk)
 (defun bench-all ()
   (bench-hunchentoot)
-  (bench-cl-tbnl-gserver-tmgr)
-  (bench-hunchentoot-recycle))
+  (bench-cl-tbnl-gserver-tmgr '(4 8 16))
+  (bench-hunchentoot-recycle '(4 8 16))
+  (bench-quux-hunchentoot))
