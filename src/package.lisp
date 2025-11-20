@@ -3,6 +3,8 @@
 (defpackage #:hunchentoot-recycle
   (:use #:cl #:alexandria)
   (:export
+   #:atomic-taskmaster
+   
    #:recycling-taskmaster
    #:parallel-acceptor
    #:parallel-easy-acceptor

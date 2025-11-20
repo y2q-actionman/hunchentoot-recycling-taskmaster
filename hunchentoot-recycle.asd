@@ -6,6 +6,7 @@
   :pathname #.(make-pathname :directory '(:relative "src"))
   :serial t
   :components ((:file "package")
+               (:file "atomic")
                (:file "taskmaster")
                (:file "acceptor"))
   :in-order-to ((test-op (test-op #:hunchentoot-recycle-test))))

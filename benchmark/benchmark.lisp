@@ -1,8 +1,8 @@
 (in-package :cl-user)
 
 (ql:quickload "hunchentoot")
-(ql:quickload "cl-tbnl-gserver-tmgr")
 (ql:quickload "hunchentoot-recycle")
+(ql:quickload "cl-tbnl-gserver-tmgr")
 (ql:quickload "quux-hunchentoot")
 
 (ql:quickload "wookie")
@@ -58,7 +58,7 @@
       (run-tcd 16 400 t)
       (run-tcd 16 400 nil))))
 
-;;; Hunchentoot
+;;; Hunchentoot and variant
 
 (hunchentoot:define-easy-handler (say-yo :uri "/yo") (name)
   (setf (hunchentoot:content-type*) "text/plain")
@@ -75,27 +75,17 @@
       (hunchentoot:stop server :soft t))
     server))
 
-;;; cl-tbnl-gserver-tmgr
-
-(defparameter *cl-tbnl-gserver-tmgr-default-thread-count*
-  cl-tbnl-gserver-tmgr.tmgr::*gserver-tmgr-poolsize*)
-
-(defun bench-cl-tbnl-gserver-tmgr (&optional (threads-list '(8)))
-  (loop
-    for threads in threads-list
-    as logname = (format nil "cl-tbnl-gserver-tmgr_threads-~D~@[-default~*~].log"
-                         threads (eql threads *cl-tbnl-gserver-tmgr-default-thread-count*))
-    as server = (make-instance 'hunchentoot:easy-acceptor
+(defun bench-hunchentoot-atomic ()
+  (let ((server (make-instance 'hunchentoot:easy-acceptor
                                :message-log-destination nil
                                :access-log-destination nil
                                :port 4242
-                               :taskmaster (make-instance 'cl-tbnl-gserver-tmgr.tmgr:gserver-tmgr
-                                                          :max-thread-count threads))
-    collect server
-    do (hunchentoot:start server)
-       (unwind-protect
-            (run-wrk "http://localhost:4242/yo" logname)
-         (hunchentoot:stop server :soft t))))
+                               :taskmaster (make-instance 'hunchentoot-recycle:atomic-taskmaster))))
+    (hunchentoot:start server)
+    (unwind-protect
+         (run-wrk "http://localhost:4242/yo" "hunchentoot_atomic-taskmaster_default.log")
+      (hunchentoot:stop server :soft t))
+    server))
 
 ;;; hunchentoot-recycle
 
@@ -115,6 +105,28 @@
                                :access-log-destination nil
                                :port 4242
                                :taskmaster taskmaster)
+    collect server
+    do (hunchentoot:start server)
+       (unwind-protect
+            (run-wrk "http://localhost:4242/yo" logname)
+         (hunchentoot:stop server :soft t))))
+
+;;; cl-tbnl-gserver-tmgr
+
+(defparameter *cl-tbnl-gserver-tmgr-default-thread-count*
+  cl-tbnl-gserver-tmgr.tmgr::*gserver-tmgr-poolsize*)
+
+(defun bench-cl-tbnl-gserver-tmgr (&optional (threads-list '(8)))
+  (loop
+    for threads in threads-list
+    as logname = (format nil "cl-tbnl-gserver-tmgr_threads-~D~@[-default~*~].log"
+                         threads (eql threads *cl-tbnl-gserver-tmgr-default-thread-count*))
+    as server = (make-instance 'hunchentoot:easy-acceptor
+                               :message-log-destination nil
+                               :access-log-destination nil
+                               :port 4242
+                               :taskmaster (make-instance 'cl-tbnl-gserver-tmgr.tmgr:gserver-tmgr
+                                                          :max-thread-count threads))
     collect server
     do (hunchentoot:start server)
        (unwind-protect
@@ -190,8 +202,8 @@
 (trace run-wrk)
 (defun bench-all ()
   (bench-hunchentoot)
-  (bench-cl-tbnl-gserver-tmgr (list 8 *nproc*))
   (bench-hunchentoot-recycle (list 8 *nproc*))
+  (bench-cl-tbnl-gserver-tmgr (list 8 *nproc*))
   (bench-quux-hunchentoot)
   (bench-wookie)
   (bench-woo '(nil 2 4))
