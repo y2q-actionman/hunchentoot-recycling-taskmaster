@@ -10,4 +10,8 @@
    #:parallel-easy-acceptor
    #:parallel-ssl-acceptor
    #:parallel-easy-ssl-acceptor
-   #:kill))
+   #:kill
+   #:atomic-acceptor
+   #:atomic-ssl-acceptor
+   #:atomic-easy-acceptor
+   #:atomic-easy-ssl-acceptor))

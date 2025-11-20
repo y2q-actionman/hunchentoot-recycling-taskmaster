@@ -52,11 +52,12 @@
              (terpri)
              (finish-output)))
       (run-tcd 4 100 t)
-      (run-tcd 4 100 nil)
+      ;; (run-tcd 4 100 nil)
       (run-tcd 4 10 t)
-      (run-tcd 4 10 nil)
+      ;; (run-tcd 4 10 nil)
       (run-tcd 16 400 t)
-      (run-tcd 16 400 nil))))
+      ;; (run-tcd 16 400 nil)
+      )))
 
 ;;; Hunchentoot and variant
 
@@ -75,7 +76,7 @@
       (hunchentoot:stop server :soft t))
     server))
 
-(defun bench-hunchentoot-atomic ()
+(defun bench-hunchentoot-atomic-taskmaster ()
   (let ((server (make-instance 'hunchentoot:easy-acceptor
                                :message-log-destination nil
                                :access-log-destination nil
@@ -84,6 +85,18 @@
     (hunchentoot:start server)
     (unwind-protect
          (run-wrk "http://localhost:4242/yo" "hunchentoot_atomic-taskmaster_default.log")
+      (hunchentoot:stop server :soft t))
+    server))
+
+(defun bench-hunchentoot-atomic-all ()
+  (let ((server (make-instance 'hunchentoot-recycle:atomic-easy-acceptor
+                               :message-log-destination nil
+                               :access-log-destination nil
+                               :port 4242
+                               :taskmaster (make-instance 'hunchentoot-recycle:atomic-taskmaster))))
+    (hunchentoot:start server)
+    (unwind-protect
+         (run-wrk "http://localhost:4242/yo" "hunchentoot_atomic-all_default.log")
       (hunchentoot:stop server :soft t))
     server))
 
@@ -97,7 +110,7 @@
     for threads in threads-list
     as logname = (format nil "hunchentoot-recycle_threads-~A~@[-default~*~].log"
                          threads
-                         (eql threads *cl-tbnl-gserver-tmgr-default-thread-count*))
+                         (eql threads *hunchentoot-recycle-default-thread-count*))
     as taskmaster = (make-instance 'hunchentoot-recycle:recycling-taskmaster
                                    :initial-thread-count threads)
     as server = (make-instance 'hunchentoot-recycle:parallel-easy-acceptor

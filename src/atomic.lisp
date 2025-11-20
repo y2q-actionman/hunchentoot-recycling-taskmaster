@@ -44,3 +44,53 @@ atomic integers."))
                  (< (hunchentoot::taskmaster-thread-count taskmaster)
                     (hunchentoot::taskmaster-max-accept-count taskmaster)))
         (hunchentoot::note-free-connection taskmaster)))))
+
+
+(defclass atomic-acceptor (hunchentoot:acceptor)
+  ((hunchentoot::requests-in-progress
+    :type bt2:atomic-integer
+    :initform (bt2:make-atomic-integer)
+    :accessor atomic-acceptor-requests-in-progress-cell
+    :documentation
+    "Works same as the original one except it is an atomic-integer."))
+  (:documentation "An acceptor works just like
+`hunchentoot:acceptor' except using atomic integers."))
+
+(defmethod hunchentoot::acceptor-requests-in-progress ((acceptor atomic-acceptor))
+  (bt2:atomic-integer-value (atomic-acceptor-requests-in-progress-cell acceptor)))
+
+(in-package :hunchentoot)
+
+(defmethod do-with-acceptor-request-count-incremented (*acceptor* function)
+  (with-lock-held ((acceptor-shutdown-lock *acceptor*))
+    (incf (acceptor-requests-in-progress *acceptor*)))
+  (unwind-protect
+       (funcall function)
+    (with-lock-held ((acceptor-shutdown-lock *acceptor*))
+      (decf (acceptor-requests-in-progress *acceptor*))
+      (when (acceptor-shutdown-p *acceptor*)
+        (condition-variable-signal (acceptor-shutdown-queue *acceptor*))))))
+
+(in-package :hunchentoot-recycle)
+
+(defmethod hunchentoot::do-with-acceptor-request-count-incremented ((*acceptor* atomic-acceptor) function)
+  (bt2:atomic-integer-incf (atomic-acceptor-requests-in-progress-cell *acceptor*))
+  (unwind-protect
+       (funcall function)
+    (bt2:atomic-integer-decf (atomic-acceptor-requests-in-progress-cell *acceptor*))
+    (hunchentoot::with-lock-held ((hunchentoot::acceptor-shutdown-lock *acceptor*))
+      (when (hunchentoot::acceptor-shutdown-p *acceptor*)
+        (hunchentoot::condition-variable-signal (hunchentoot::acceptor-shutdown-queue *acceptor*))))))
+
+;;; acceptor-shutdown-p
+
+
+;;; Derived classes
+(defclass atomic-ssl-acceptor (atomic-acceptor hunchentoot:ssl-acceptor)
+  ())
+
+(defclass atomic-easy-acceptor (atomic-acceptor hunchentoot:easy-acceptor)
+  ())
+
+(defclass atomic-easy-ssl-acceptor (atomic-easy-acceptor atomic-ssl-acceptor)
+  ())
