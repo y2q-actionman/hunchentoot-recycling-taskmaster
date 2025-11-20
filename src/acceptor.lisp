@@ -30,9 +30,7 @@ the listen socket."
       ;; Wait for all thread end. This includes waiting for
       ;; `hunchentoot::acceptor-shutdown-queue' done by
       ;; original `hunchentoot:stop'.
-      (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
-        (when (plusp (count-recycling-taskmaster-thread taskmaster :lock nil))
-          (wait-for-recycling-taskmaster-shutdown taskmaster)))))
+      (wait-for-recycling-taskmaster-shutdown taskmaster)))
   (usocket:socket-close (hunchentoot::acceptor-listen-socket acceptor))
   (setf (hunchentoot::acceptor-listen-socket acceptor) nil)
   acceptor)
