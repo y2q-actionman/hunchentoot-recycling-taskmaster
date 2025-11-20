@@ -52,43 +52,12 @@ atomic integers."))
     :initform (bt2:make-atomic-integer)
     :accessor atomic-acceptor-requests-in-progress-cell
     :documentation
-    "Works same as the original one except it is an atomic-integer.")
-   (hunchentoot::acceptor-shutdown-p
-    :type bt2:atomic-integer
-    :initform (bt2:make-atomic-integer :value 1)
-    :accessor atomic-acceptor-shutdown-p-cell
-    :documentation "Works same as the original one except it is an atomic-integer. 1 means true, 0 means false."))
+    "Works same as the original one except it is an atomic-integer."))
   (:documentation "An acceptor works just like
 `hunchentoot:acceptor' except using atomic integers."))
 
 (defmethod hunchentoot::acceptor-requests-in-progress ((acceptor atomic-acceptor))
   (bt2:atomic-integer-value (atomic-acceptor-requests-in-progress-cell acceptor)))
-
-(defmethod hunchentoot::acceptor-shutdown-p ((acceptor atomic-acceptor))
-  (= 1 (bt2:atomic-integer-value (atomic-acceptor-shutdown-p-cell acceptor))))
-
-(defmethod (setf hunchentoot::acceptor-shutdown-p) (boolean (acceptor atomic-acceptor))
-  (setf (bt2:atomic-integer-value (atomic-acceptor-shutdown-p-cell acceptor))
-        (if boolean 1 0)))
-
-(defmethod hunchentoot:stop ((acceptor atomic-acceptor) &key soft)
-  (setf (hunchentoot::acceptor-shutdown-p acceptor) t)
-  #-lispworks
-  (hunchentoot::wake-acceptor-for-shutdown acceptor)
-  (when soft
-    (when (plusp (hunchentoot::acceptor-requests-in-progress acceptor))
-      (hunchentoot::with-lock-held ((hunchentoot::acceptor-shutdown-lock acceptor))
-        (when (plusp (hunchentoot::acceptor-requests-in-progress acceptor))
-          (hunchentoot::condition-variable-wait (hunchentoot::acceptor-shutdown-queue acceptor)
-                                                (hunchentoot::acceptor-shutdown-lock acceptor))))))
-  (hunchentoot:shutdown (hunchentoot::acceptor-taskmaster acceptor))
-  #-lispworks
-  (usocket:socket-close (hunchentoot::acceptor-listen-socket acceptor))
-  #-lispworks
-  (setf (hunchentoot::acceptor-listen-socket acceptor) nil)
-  #+lispworks
-  (mp:process-kill (hunchentoot::acceptor-process acceptor))
-  acceptor)
 
 (defgeneric hunchentoot::do-with-acceptor-request-count-incremented (acceptor function))
 
@@ -112,26 +81,9 @@ atomic integers."))
   (unwind-protect
        (funcall function)
     (bt2:atomic-integer-decf (atomic-acceptor-requests-in-progress-cell hunchentoot::*acceptor*))
-    (when (hunchentoot::acceptor-shutdown-p hunchentoot::*acceptor*)
-      (hunchentoot::with-lock-held ((hunchentoot::acceptor-shutdown-lock hunchentoot::*acceptor*))
-        (when (hunchentoot::acceptor-shutdown-p hunchentoot::*acceptor*)
-          (hunchentoot::condition-variable-signal (hunchentoot::acceptor-shutdown-queue hunchentoot::*acceptor*)))))))
-
-(defmethod hunchentoot::accept-connections ((acceptor atomic-acceptor))
-  (usocket:with-server-socket (listener (hunchentoot::acceptor-listen-socket acceptor))
-    (loop
-      (when (hunchentoot::acceptor-shutdown-p acceptor)
-        (return))
-      (when (usocket:wait-for-input listener :ready-only t)
-        (alexandria:when-let (client-connection
-                              (handler-case (usocket:socket-accept listener)
-                                ;; ignore condition
-                                (usocket:connection-aborted-error ())))
-          (hunchentoot::set-timeouts client-connection
-                                     (hunchentoot::acceptor-read-timeout acceptor)
-                                     (hunchentoot::acceptor-write-timeout acceptor))
-          (hunchentoot::handle-incoming-connection (hunchentoot::acceptor-taskmaster acceptor)
-                                                   client-connection))))))
+    (hunchentoot::with-lock-held ((hunchentoot::acceptor-shutdown-lock hunchentoot::*acceptor*))
+      (when (hunchentoot::acceptor-shutdown-p hunchentoot::*acceptor*)
+        (hunchentoot::condition-variable-signal (hunchentoot::acceptor-shutdown-queue hunchentoot::*acceptor*))))))
 
 ;;; Derived classes
 (defclass atomic-ssl-acceptor (atomic-acceptor hunchentoot:ssl-acceptor)
