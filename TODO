@@ -17,3 +17,5 @@ TODO:
 - to do it:
   1. try use atomic-ops at the constructor.
   2. If "not-implemented" was signaled, simply raises an error.
+
+- clack handler?

@@ -1,0 +1,31 @@
+* Abstract
+
+**hunchentoot-recycle** is a hunchentoot taskmaster implementation
+that aims to improve the efficiency of connection establishment by
+adding a thread recycling mechanism.
+This mechanism is implemented by using the listen socket itself for
+thread synchronization.
+Therefore, it successfully implements a thread-pool-like mechanism
+without adding any new dependent libraries to hunchentoot.
+
+#+begin_comment
+translate to English:
+
+hunchentoot-recycle は、 hunchentoot に thread-pool と同様の thread を使い回す仕組みを足して
+接続確立時の処理を効率化することを狙った hunchentoot の taskmaster 実装です。
+
+この仕掛けは、 listen socket そのものを thread の待合せに使うことで実装しています。
+
+そのため、hunchentoot に新たな依存 ライブラリ を追加することなく、 thread-pool のような仕組みを実現することに成功しています。
+#+end_comment
+
+* TODO performance tl;dr
+
+[Image]
+
+On this benchmark, http connections use *no keep-alive* and my http handler *sleeps for 0.1ms*.
+If your workload is such a thing, **hunchentoot-recycle** may be useful.
+
+* How to use
+
+* Benchmarking
