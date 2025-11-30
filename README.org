@@ -1,6 +1,6 @@
 * Abstract
 
-**hunchentoot-recycle** is a hunchentoot taskmaster implementation
+hunchentoot-recycle is a hunchentoot taskmaster implementation
 that aims to improve the efficiency of connection establishment by
 adding a thread recycling mechanism.
 This mechanism is implemented by using the listen socket itself for
@@ -21,11 +21,83 @@ hunchentoot-recycle は、 hunchentoot に thread-pool と同様の thread を�
 
 * TODO performance tl;dr
 
-[Image]
+[Image *no keep-alive* *sleeps for 0.1ms*.]
+[Image *keep-alive* *sleeps for 0.1ms*.]
 
-On this benchmark, http connections use *no keep-alive* and my http handler *sleeps for 0.1ms*.
-If your workload is such a thing, **hunchentoot-recycle** may be useful.
+On this benchmark, my HTTP handler *always sleeps for 0.1ms* to simulate some workloads.
+
+- Hunchentoot is straightforward all-rounder. It works well on Keep-alive connections. I think it is good for typical use-cases.
+- If your workload does not utilize Keep-alive, hunchentoot-recycle may be useful.
+- Woo is difficult for me. Woo seems fast only when your handlers don't perform any computations. See below [link to "About Woo" below.]
 
 * How to use
 
 * Benchmarking
+
+** no keep-alive, sleep 0.1ms
+
+[Image]
+
+** keep-alive, sleep 0.1ms
+
+[Image]
+
+Hunchentoot は接続ごとに 1 thread を割り当てる。
+
+これはつまり、 HTTP/1.1 の keep-alive が有効であれば、 "Connection: close" などで明示的に接続を
+閉じるまでは、その接続に対応する thread はずっと使い回されることを意味する。
+
+そのため、 keep-alive が有効に使われている workload ならそんなに遅くない。
+wrk は keep-alive を default で使用するので、この恩恵を受けている。
+
+** keep-alive, no sleep
+
+[Image]
+
+Woo はこの場合だけは早い。
+
+*** About Woo
+
+Woo は handler が少しでも遅延すると disastaours に遅くなる。
+上の "0.1ms sleep" のとき、  Woo の handler には以下のように書いたが、これが酷い結果を招く。
+
+#+begin_src lisp
+  (lambda (env)
+    (declare (ignore env))
+    (sleep 0.0001)
+    '(200 (:content-type "text/plain") ("Hello, World")))
+#+end_src
+
+これは、 Woo が 1 thread で複数の connection を同時に扱う async なサーバであるため、
+ 1 connection の処理の中で遅延が発生すると同一 thread の他 connection 全ての処理が遅延するためである。
+async な architecture から考えれば sleep してはいけないのは自明のことだ。
+
+さてこのような場合、一般的には async server の event loop 内部で sleep したりはしない。
+event loop の外で時間がかかる処理を実行し、それが終わったら event loop に送受信する内容を通知したり、
+callback を呼び出してもらうよう設定したりするようなことが行われる。
+(このため、かつて =async= が使われるようになるより前の Node.js の code は callback hell などと呼ばれていたわけだが)
+
+
+しかし、どういうわけか Woo にはそのような仕組みがないように思う。私は見つけられなかった。
+Woo を使っているとされる quickdocks-api や、 https://github.com/TechEmpower/FrameworkBenchmarks/pull/8313 では
+そのような配慮はしていないようだ。
+
+一部 SNS のコメント ( https://lisp-journey.gitlab.io/blog/why-turtl-switched-from-lisp-to-js/,
+reddit のやつ) では、 "lparallel で offload できる" と言っている人がいるが、それを実際にやっている
+コードを私はまだ見付けられていない。以下のような naive に thread を立てるコードはエラーになる。
+event loop の実体であるところの =*evloop*= 変数は =(make-thread)= で作った thread では
+参照できず、 =NIL= になってしまうためだ。
+
+この問題は Woo が依存している libev を直接扱い、 event loop を直接扱って、 sleep 等を
+自分で作れば解決できなくはない。 [このコード] は Gemini-CLI が書いてきたものである。
+確かに動作したし benchmark も悪くない。ただ、このコードがどうやって動いているかを私は知らない。
+聞かないでほしい。
+
+
+そういうわけで、 Woo で "sleep 0.1ms" を benchmark するのには、上記の酷いコード例
+を使わざるを得ないように思う。これは Woo にとって非常に不利だが、 Woo のサポートが
+欠如しているので仕方のないことだろう。
+
+Woo の状況が変わらなければ、 it could be said that Woo is very fast only when your handlers does not compute anything.
+ think Woo is *only* good for serving static pages.
+   # but why did such a thing by Lisp? Use nginx.
