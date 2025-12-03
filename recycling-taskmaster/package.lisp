@@ -1,22 +1,17 @@
 (in-package :cl-user)
 
-(defpackage #:hunchentoot-recycle
+(defpackage #:hunchentoot-recycling-taskmaster
   (:use #:cl #:alexandria)
   (:export
-   #:atomic-taskmaster
-   
    #:recycling-taskmaster
    #:parallel-acceptor
    #:parallel-easy-acceptor
    #:parallel-ssl-acceptor
    #:parallel-easy-ssl-acceptor
    #:kill
-   #:atomic-acceptor
-   #:atomic-ssl-acceptor
-   #:atomic-easy-acceptor
-   #:atomic-easy-ssl-acceptor
-   #:atomic-parallel-ssl-acceptor
-   #:atomic-parallel-easy-acceptor
-   #:atomic-parallel-easy-ssl-acceptor
-   #:atomic-recycling-taskmaster
-   #:atomic-parallel-acceptor))
+   ;; exported for hunchentoot-atomic-op-taskmaster
+   #:recycling-taskmaster-busy-thread-count-lock
+   #:recycling-taskmaster-busy-thread-count
+   #:recycling-taskmaster-busy-thread-count-queue
+   #:recycling-taskmaster-shutdown-queue
+   #:recycling-taskmaster-acceptor-process-lock))

@@ -1,4 +1,4 @@
-(in-package #:hunchentoot-recycle)
+(in-package #:hunchentoot-recycling-taskmaster)
 
 (defclass parallel-acceptor (hunchentoot:acceptor)
   (
@@ -17,7 +17,7 @@
 
 (defmethod hunchentoot:start :before ((acceptor parallel-acceptor))
   (let ((taskmaster (hunchentoot::acceptor-taskmaster acceptor)))
-    (check-type taskmaster hunchentoot-recycle:recycling-taskmaster)))
+    (check-type taskmaster hunchentoot-recycling-taskmaster:recycling-taskmaster)))
 
 (defmethod hunchentoot:stop ((acceptor parallel-acceptor) &key soft)
   "This works like the parental method, except some works for sharing
@@ -64,7 +64,7 @@ the listen socket."
 
 (defmethod hunchentoot::acceptor-server-name ((acceptor parallel-acceptor))
   ;; FIXME: a good version string..
-  (format nil "Hunchentoot-recycle 0.0.0 (experimental), based on ~A"
+  (format nil "hunchentoot-recycling-taskmaster 0.0.0 (experimental), based on ~A"
           (call-next-method)))
 
 (defmethod kill ((acceptor parallel-acceptor))

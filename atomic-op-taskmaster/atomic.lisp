@@ -1,4 +1,4 @@
-(in-package #:hunchentoot-recycle)
+(in-package #:hunchentoot-atomic-op-taskmaster)
 
 (defclass atomic-taskmaster (hunchentoot:one-thread-per-connection-taskmaster)
   ((hunchentoot::thread-count
@@ -61,7 +61,7 @@ atomic integers."))
 
 (defgeneric hunchentoot::do-with-acceptor-request-count-incremented (acceptor function))
 
-(in-package :hunchentoot)
+(in-package #:hunchentoot)
 
 ;;; same as the original 
 (defmethod do-with-acceptor-request-count-incremented (*acceptor* function)
@@ -74,7 +74,7 @@ atomic integers."))
       (when (acceptor-shutdown-p *acceptor*)
         (condition-variable-signal (acceptor-shutdown-queue *acceptor*))))))
 
-(in-package :hunchentoot-recycle)
+(in-package #:hunchentoot-atomic-op-taskmaster)
 
 (defmethod hunchentoot::do-with-acceptor-request-count-incremented ((hunchentoot::*acceptor* atomic-acceptor) function)
   (bt2:atomic-integer-incf (atomic-acceptor-requests-in-progress-cell hunchentoot::*acceptor*))

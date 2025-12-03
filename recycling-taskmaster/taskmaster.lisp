@@ -1,4 +1,4 @@
-(in-package #:hunchentoot-recycle)
+(in-package #:hunchentoot-recycling-taskmaster)
 
 (defvar *default-initial-thread-count* 4)
 
@@ -146,7 +146,7 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
   "Checks the type of ACCEPTOR slot, because recycling-taskmaster needs
  a crafted `hunchentoot:accept-connections' not using `usocket:with-server-socket'."
   (check-type (hunchentoot::taskmaster-acceptor taskmaster)
-              hunchentoot-recycle:parallel-acceptor))
+              hunchentoot-recycling-taskmaster:parallel-acceptor))
 
 (defmethod hunchentoot:execute-acceptor ((taskmaster recycling-taskmaster))
   "Make initial threads working on `parallel-acceptor'."

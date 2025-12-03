@@ -11,7 +11,7 @@
 ;;; Start
 
 (defparameter *test-server*
-  (let* ((acceptor (make-instance 'hunchentoot-recycle:parallel-easy-acceptor
+  (let* ((acceptor (make-instance 'hunchentoot-recycling-taskmaster:parallel-easy-acceptor
                                   :port 4242)))
     (hunchentoot:start acceptor)))
 

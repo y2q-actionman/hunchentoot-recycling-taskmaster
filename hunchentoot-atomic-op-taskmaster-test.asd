@@ -1,11 +1,11 @@
-(defsystem #:hunchentoot-recycling-taskmaster-test
-  :description "Tests for hunchentoot-recycling-taskmaster"
+(defsystem #:hunchentoot-atomic-op-taskmaster-test
+  :description "Tests for hunchentoot-atomic-op-taskmaster"
   :license "BSD 2-Clause"
   :author "Yokota Yuki"
-  :depends-on (#:hunchentoot-recycling-taskmaster
+  :depends-on (#:hunchentoot-atomic-op-taskmaster
                #:1am
                #:drakma)
-  :pathname #.(make-pathname :directory '(:relative "test" "recycling-taskmaster-test"))
+  :pathname #.(make-pathname :directory '(:relative "test" "atomic-op-taskmaster-test"))
   :serial t
   :components ((:file "package")
                ;; TODO
