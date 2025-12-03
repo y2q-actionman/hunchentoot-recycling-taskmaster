@@ -81,6 +81,7 @@ callback を呼び出してもらうよう設定したりするようなこと�
 しかし、どういうわけか Woo にはそのような仕組みがないように思う。私は見つけられなかった。
 Woo を使っているとされる quickdocks-api や、 https://github.com/TechEmpower/FrameworkBenchmarks/pull/8313 では
 そのような配慮はしていないようだ。
+(だから https://www.reddit.com/r/Common_Lisp/comments/1506kqb/comment/js220a6/ の link 先で見られる benchmark 結果は奮わないのだろう。)
 
 一部 SNS のコメント ( https://lisp-journey.gitlab.io/blog/why-turtl-switched-from-lisp-to-js/,
 reddit のやつ) では、 "lparallel で offload できる" と言っている人がいるが、それを実際にやっている
@@ -101,3 +102,17 @@ event loop の実体であるところの =*evloop*= 変数は =(make-thread)= �
 Woo の状況が変わらなければ、 it could be said that Woo is very fast only when your handlers does not compute anything.
  think Woo is *only* good for serving static pages.
    # but why did such a thing by Lisp? Use nginx.
+
+* Ideas
+
+bordeaux-threads-2 に追加された atomic 変数を使って lock を減らすのも試してみた。
+
+SBCL においては、 hunchentoot の slot については効果が少なかった。
+hunchentoot-recycle の slot においては有効であった。
+
+[Image]
+
+Allegro CL においては、結構ききめがあった。
+おそらくは lock の競合がとても重いせいかなと思う。
+
+[Image]

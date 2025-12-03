@@ -18,8 +18,16 @@
 (ql:quickload "woo")
 ;;; sudo apt install libev-dev
 ;;; https://lisp-journey.gitlab.io/blog/why-turtl-switched-from-lisp-to-js/
+;;; https://news.ycombinator.com/item?id=29019217
 
 (ql:quickload "house")
+
+;;; https://killtheradio.net/technology/cl-async-non-blocking-asynchronous-programming-for-common-lisp/
+
+(ql:quickload "clack")
+
+(ql:quickload "conserv")
+;; sudo apt install libfixposix-dev
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -52,16 +60,17 @@
              (terpri)
              (finish-output)))
       (run-tcd 4 100 t)
-      (run-tcd 4 100 nil)
+      ;; (run-tcd 4 100 nil)
       (run-tcd 4 10 t)
-      (run-tcd 4 10 nil)
+      ;; (run-tcd 4 10 nil)
       (run-tcd 16 400 t)
-      (run-tcd 16 400 nil)
+      ;; (run-tcd 16 400 nil)
       )))
 
 ;;; Hunchentoot and variant
 
 (hunchentoot:define-easy-handler (say-yo :uri "/yo") (name)
+  (sleep 0.001)
   (setf (hunchentoot:content-type*) "text/plain")
   (format nil "Hey~@[ ~A~]!" name))
 
@@ -263,6 +272,62 @@
             (run-wrk "http://localhost:5000" logname)
          (bt:destroy-thread server-thread))))
 
+(defparameter *woo-callback-app*
+  (lambda (_env)
+    (declare (ignore _env))
+    (lambda (callback)
+      (describe callback)
+      (describe woo.ev:*evloop*)
+      
+      ;; (funcall callback '(200 (:content-type "text/plain") ("Hello, World")))
+      
+      (let ((evloop woo.ev:*evloop*))
+        (bt:make-thread (lambda (&aux (woo.ev:*evloop* 0))
+                          (describe evloop)
+                          (describe woo.ev:*evloop*)
+                          (funcall callback '(200 (:content-type "text/plain") ("Hello, World"))))))
+
+      (princ "end!" *standard-output*))))
+
+(defun bench-woo-callback (&optional (threads-list '(nil)))
+  (loop
+    for threads in threads-list
+    as logname = (format nil "woo-callback_threads-~D~@[-default~*~].log"
+                         threads (eql threads nil))
+    as thunk = (lambda ()
+                 (woo:run
+                  *woo-callback-app*
+                  :worker-num threads))
+    as server-thread = (bt:make-thread
+                        thunk :name (format nil "Woo server thread ~A" threads))
+    collect server-thread
+    do (sleep 1)                           ; wait for starting
+       (unwind-protect
+            (run-wrk "http://localhost:5000" logname)
+         (bt:destroy-thread server-thread))))
+
+;;; ????
+;;; https://github.com/TechEmpower/FrameworkBenchmarks/blob/master/frameworks/Lisp/woo/woo.ros
+;; https://www.reddit.com/r/Common_Lisp/comments/1hmxv4k/comment/m4feb4b/
+
+;; (defparameter *woo-callback-threads-app*
+;;   (lambda (_env)
+;;     (declare (ignore _env))
+;;     (lambda (callback)
+;;       (bt:make-thread (lambda ()
+;;                         (funcall callback '(200 (:content-type "text/plain") ("Hello, World"))))))))
+
+;; (defun bench-woo-callback-threads (&optional (threads-list '(nil)))
+;;   (loop
+;;     for threads in threads-list
+;;     as logname = (format nil "woo-callback_threads-~D~@[-default~*~].log"
+;;                          threads (eql threads nil))
+;;     as server = (clack:clackup *woo-callback-threads-app* :server :woo)
+;;     do (sleep 1)                        ; wait for starting
+;;        (unwind-protect
+;;             (run-wrk "http://localhost:5000" logname)
+;;          (clack:stop server))))
+
 ;;; House
 
 (house:define-handler (hello-world :content-type "text/plain") ()
@@ -279,6 +344,31 @@
       (bt:destroy-thread server-thread))
     server-thread))
 
+;;; Conserv
+
+(defclass hello () ())
+
+(defmethod conserv.http:on-http-request ((driver hello))
+  (conserv.http:set-headers conserv.http:*request* :content-type "text/html")
+  (format conserv.http:*request* "<h1>Hello, world!</h1>")
+  (close conserv.http:*request*))
+
+(defun conserv-start ()
+  (conserv:with-event-loop ()
+  (conserv.http:http-listen (make-instance 'hello)
+                            :port 8888)))
+
+;; (defun bench-house ()
+;; (let ((server-thread
+;;         (bt:make-thread
+;;          (lambda () (house:start 4040))
+;;          :name "House server thread")))
+;;   (sleep 1)                             ; wait for starting
+;;   (unwind-protect
+;;        (run-wrk "http://localhost:4040" "house_default.log")
+;;     (bt:destroy-thread server-thread))
+;;   server-thread))
+
 ;;; for repl
 (trace run-wrk)
 (defun bench-all ()
@@ -293,5 +383,6 @@
   (bench-cl-tbnl-gserver-tmgr (list 8 *nproc*))
   (bench-quux-hunchentoot)
   (bench-wookie)
-  (bench-woo '(nil 2 4))
+  (bench-woo (list nil 8 *nproc*))
+  (bench-woo-callback (list nil 8 *nproc*))
   (bench-house))
