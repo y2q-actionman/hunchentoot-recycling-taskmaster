@@ -8,11 +8,11 @@
     :initform (make-hash-table :test 'equal)
     :documentation "recycling-taskmaster tracks threads using a hash-table.")
    (acceptor-process-lock
-    :initform (hunchentoot::make-lock "recycling-taskmaster-acceptor-process-lock")
+    :initform (make-lock "recycling-taskmaster-acceptor-process-lock")
     :reader recycling-taskmaster-acceptor-process-lock
     :documentation "A lock for protecting acceptor-process slot.")
    (shutdown-queue
-    :initform (hunchentoot::make-condition-variable)
+    :initform (make-condition-variable)
     :reader recycling-taskmaster-shutdown-queue
     :documentation
     "A condition variable to wait for all threads end, locked by acceptor-process-lock.")
@@ -41,12 +41,12 @@ Thread states:
   In `hunchentoot:handle-incoming-connection%'.
   Counted by hunchentoot's original slots.")
    (busy-thread-count-lock
-    :initform (hunchentoot::make-lock "recycling-taskmaster-busy-thread-count-lock")
+    :initform (make-lock "recycling-taskmaster-busy-thread-count-lock")
     :reader recycling-taskmaster-busy-thread-count-lock
     :documentation
     "A lock for atomically incrementing/decrementing the busy-thread-count slot.")
    (busy-thread-count-queue
-    :initform (hunchentoot::make-condition-variable)
+    :initform (make-condition-variable)
     :reader recycling-taskmaster-busy-thread-count-queue
     :documentation
     "A condition variable to wait for the ends of client connections, locked by busy-thread-count-lock."))
@@ -74,22 +74,22 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
       (hunchentoot:parameter-error "INITIAL-THREAD-COUNT must be equal or less than MAX-ACCEPT-COUNT"))))
 
 (defmethod add-recycling-taskmaster-thread (taskmaster thread)
-  (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
+  (with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
     (let ((table (hunchentoot::acceptor-process taskmaster)))
       (setf (gethash thread table) t))))
 
 (defmethod remove-recycling-taskmaster-thread (taskmaster thread)
-  (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
+  (with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
     (let* ((table (hunchentoot::acceptor-process taskmaster))
            (deleted? (remhash thread table)))
       (when (and deleted?
                  (<= (hash-table-count table) 0))
-        (hunchentoot::condition-variable-signal (recycling-taskmaster-shutdown-queue taskmaster)))
+        (condition-variable-signal (recycling-taskmaster-shutdown-queue taskmaster)))
       deleted?)))
 
 (defmethod count-recycling-taskmaster-thread (taskmaster &key (lock t))
   (if lock
-      (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
+      (with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
         (hash-table-count (hunchentoot::acceptor-process taskmaster)))
       (hash-table-count (hunchentoot::acceptor-process taskmaster))))
 
@@ -99,9 +99,9 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
 (defmethod decrement-recycling-taskmaster-busy-thread-count ((taskmaster recycling-taskmaster))
   (let ((rest (bt2:atomic-integer-decf (recycling-taskmaster-busy-thread-count taskmaster))))
     (when (<= rest 0)
-      (hunchentoot::with-lock-held ((recycling-taskmaster-busy-thread-count-lock taskmaster))
+      (with-lock-held ((recycling-taskmaster-busy-thread-count-lock taskmaster))
         (when (<= (bt2:atomic-integer-value (recycling-taskmaster-busy-thread-count taskmaster)) 0)
-          (hunchentoot::condition-variable-signal (recycling-taskmaster-busy-thread-count-queue taskmaster)))))
+          (condition-variable-signal (recycling-taskmaster-busy-thread-count-queue taskmaster)))))
     rest))
 
 (define-condition end-of-parallel-acceptor-thread (error)
@@ -123,7 +123,7 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
                   (error
                     (lambda (&optional e)
                       (when (and
-                             (hunchentoot::with-lock-held
+                             (with-lock-held
                                  ((hunchentoot::acceptor-shutdown-lock acceptor))
                                (hunchentoot::acceptor-shutdown-p acceptor))
                              (let ((sock (hunchentoot::acceptor-listen-socket acceptor)))
@@ -198,15 +198,15 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
 
 (defmethod wait-end-of-handle-incoming-connection (taskmaster)
   (when (plusp (bt2:atomic-integer-value (recycling-taskmaster-busy-thread-count taskmaster)))
-    (hunchentoot::with-lock-held ((recycling-taskmaster-busy-thread-count-lock taskmaster))
+    (with-lock-held ((recycling-taskmaster-busy-thread-count-lock taskmaster))
       (when (plusp (bt2:atomic-integer-value (recycling-taskmaster-busy-thread-count taskmaster)))
-        (hunchentoot::condition-variable-wait
+        (condition-variable-wait
          (recycling-taskmaster-busy-thread-count-queue taskmaster)
          (recycling-taskmaster-busy-thread-count-lock taskmaster))))))
 
 (defmethod delete-recycling-taskmaster-finished-thread (taskmaster)
   "Delete dead threads kept in TASKMASTER accidentally."
-  (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
+  (with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
     (loop
       with table = (hunchentoot::acceptor-process taskmaster)
       for thread being the hash-key of (hunchentoot::acceptor-process taskmaster)
@@ -216,7 +216,7 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
       finally
          (when (and (plusp deleted-cnt)
                     (<= (hash-table-count table) 0))
-           (hunchentoot::condition-variable-signal (recycling-taskmaster-shutdown-queue taskmaster)))
+           (condition-variable-signal (recycling-taskmaster-shutdown-queue taskmaster)))
          (return (plusp deleted-cnt)))))
 
 (defun wake-acceptor-for-shutdown-using-listen-socket (listen-socket)
@@ -263,9 +263,9 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
                (hunchentoot::acceptor-log-message acceptor :error "Wake-for-shutdown connect failed: ~A" e))))))
 
 (defmethod wait-for-recycling-taskmaster-shutdown (taskmaster)
-  (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
+  (with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
     (when (plusp (count-recycling-taskmaster-thread taskmaster :lock nil))
-      (hunchentoot::condition-variable-wait
+      (condition-variable-wait
        (recycling-taskmaster-shutdown-queue taskmaster)
        (recycling-taskmaster-acceptor-process-lock taskmaster)))))
 
