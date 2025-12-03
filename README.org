@@ -1,6 +1,6 @@
 * Abstract
 
-hunchentoot-recycle is a hunchentoot taskmaster implementation
+hunchentoot-recycling-taskmaster is a hunchentoot taskmaster implementation
 that aims to improve the efficiency of connection establishment by
 adding a thread recycling mechanism.
 This mechanism is implemented by using the listen socket itself for
@@ -11,7 +11,7 @@ without adding any new dependent libraries to hunchentoot.
 #+begin_comment
 translate to English:
 
-hunchentoot-recycle は、 hunchentoot に thread-pool と同様の thread を使い回す仕組みを足して
+hunchentoot-recycling-taskmaster は、 hunchentoot に thread-pool と同様の thread を使い回す仕組みを足して
 接続確立時の処理を効率化することを狙った hunchentoot の taskmaster 実装です。
 
 この仕掛けは、 listen socket そのものを thread の待合せに使うことで実装しています。
@@ -27,7 +27,7 @@ hunchentoot-recycle は、 hunchentoot に thread-pool と同様の thread を�
 On this benchmark, my HTTP handler *always sleeps for 0.1ms* to simulate some workloads.
 
 - Hunchentoot is straightforward all-rounder. It works well on Keep-alive connections. I think it is good for typical use-cases.
-- If your workload does not utilize Keep-alive, hunchentoot-recycle may be useful.
+- If your workload does not utilize Keep-alive, hunchentoot-recycling-taskmaster may be useful.
 - Woo is difficult for me. Woo seems fast only when your handlers don't perform any computations. See below [link to "About Woo" below.]
 
 * How to use
@@ -108,7 +108,7 @@ Woo の状況が変わらなければ、 it could be said that Woo is very fast 
 bordeaux-threads-2 に追加された atomic 変数を使って lock を減らすのも試してみた。
 
 SBCL においては、 hunchentoot の slot については効果が少なかった。
-hunchentoot-recycle の slot においては有効であった。
+recycling-taskmaster の追加 slot においては有効であった。
 
 [Image]
 

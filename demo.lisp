@@ -1,6 +1,6 @@
 (in-package :cl-user)
 
-(ql:quickload "hunchentoot-recycle")
+(ql:quickload "hunchentoot-recycling-taskmaster")
 
 ;;; Defines a test page, from the doc of Hunchentoot
 

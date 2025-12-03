@@ -1,8 +1,8 @@
-(defsystem #:hunchentoot-recycle-test
-  :description "Tests for hunchentoot-recycle"
+(defsystem #:hunchentoot-recycling-taskmaster-test
+  :description "Tests for hunchentoot-recycling-taskmaster"
   :license "BSD 2-Clause"
   :author "Yokota Yuki"
-  :depends-on (#:hunchentoot-recycle
+  :depends-on (#:hunchentoot-recycling-taskmaster
                #:1am
                #:drakma)
   :pathname #.(make-pathname :directory '(:relative "test"))
