@@ -1,0 +1,34 @@
+wrk -t16 -c400 -d10 "http://localhost:4242/yo"
+Running 10s test @ http://localhost:4242/yo
+  16 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.46ms    8.37ms 266.89ms   96.96%
+    Req/Sec    28.10k    20.39k   79.29k    59.67%
+  2029325 requests in 10.08s, 285.37MB read
+  Socket errors: connect 0, read 3507, write 1599, timeout 0
+  Non-2xx or 3xx responses: 5106
+Requests/sec: 201370.15
+Transfer/sec:     28.32MB
+
+↓
+
+Socket error in "accept": 24 (Too many open files)
+   [Condition of type SB-BSD-SOCKETS:SOCKET-ERROR]
+
+Restarts:
+ 0: [ABORT] abort thread (#<THREAD "quux-hunchentoot-listener-*:4242" RUNNING {1001340073}>)
+
+Backtrace:
+  0: (SB-BSD-SOCKETS:SOCKET-ERROR "accept" 24)
+  1: (SB-BSD-SOCKETS::CALL-WITH-SOCKET-ADDR #<SB-BSD-SOCKETS:INET-SOCKET 0.0.0.0:4242, fd: 4 {10013BC9C3}> NIL #<FUNCTION (FLET SB-BSD-SOCKETS::WITH-SOCKET-ADDR-THUNK :IN SB-BSD-SOCKETS:SOCKET-ACCEPT) {7F4..
+  2: ((:METHOD SB-BSD-SOCKETS:SOCKET-ACCEPT (SB-BSD-SOCKETS:SOCKET)) #<SB-BSD-SOCKETS:INET-SOCKET 0.0.0.0:4242, fd: 4 {10013BC9C3}>) [fast-method]
+  3: ((:METHOD USOCKET:SOCKET-ACCEPT (USOCKET:STREAM-SERVER-USOCKET)) #<USOCKET:STREAM-SERVER-USOCKET {10041356F3}> :ELEMENT-TYPE NIL) [fast-method]
+  4: ((:METHOD HUNCHENTOOT:ACCEPT-CONNECTIONS (HUNCHENTOOT:ACCEPTOR)) #<HUNCHENTOOT:EASY-ACCEPTOR (host *, port 4242)>) [fast-method]
+  5: ((LABELS BORDEAUX-THREADS::%BINDING-DEFAULT-SPECIALS-WRAPPER :IN BORDEAUX-THREADS::BINDING-DEFAULT-SPECIALS))
+  6: ((FLET SB-UNIX::BODY :IN SB-THREAD::RUN))
+  7: ((FLET "WITHOUT-INTERRUPTS-BODY-11" :IN SB-THREAD::RUN))
+  8: ((FLET SB-UNIX::BODY :IN SB-THREAD::RUN))
+  9: ((FLET "WITHOUT-INTERRUPTS-BODY-4" :IN SB-THREAD::RUN))
+ 10: (SB-THREAD::RUN)
+ 11: ("foreign function: call_into_lisp_")
+ 12: ("foreign function: funcall1")

@@ -17,4 +17,4 @@
 *.wx32fsl
 
 *.log
-*.bak
+*.bak*
