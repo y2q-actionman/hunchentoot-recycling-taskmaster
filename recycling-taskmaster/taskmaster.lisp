@@ -177,29 +177,25 @@ Thread counter summary:
  accept(2). It processes a client-connection by itself and controls
  how many threads working around the process. "
   (usocket:with-connected-socket (client-connection client-connection)
-    ;; If already shut down, return immediately.
-    (when (hunchentoot::acceptor-shutdown-p (hunchentoot::taskmaster-acceptor taskmaster))
-      ;; Goes up to the loop of `hunchentoot:accept-connections' to
-      ;; check shutdown-p with locking again.
-      (return-from hunchentoot:handle-incoming-connection))
     (with-counting-busy-thread (busy-threads) taskmaster
-      (let* ((all-threads (count-recycling-taskmaster-thread taskmaster))
+      ;; Makes a thread if all threads are busy.
+      (unless (hunchentoot::acceptor-shutdown-p (hunchentoot::taskmaster-acceptor taskmaster))
+        (let* ((all-threads (count-recycling-taskmaster-thread taskmaster))
+               (listening-threads (- all-threads busy-threads)))
+          (when (<= listening-threads 0)
+            (make-parallel-acceptor-thread taskmaster))))
+      ;; process the connection by itself.
+      (hunchentoot::handle-incoming-connection%
+       taskmaster
+       ;; Pass CLIENT-CONNECTION to the Hunchentoot handler and prevent close() here.
+       (shiftf client-connection nil))
+      ;; If shut-down while processing CLIENT-CONNECTION, return immediately.
+      (when (hunchentoot::acceptor-shutdown-p (hunchentoot::taskmaster-acceptor taskmaster))
+        (return-from hunchentoot:handle-incoming-connection))
+      ;; See waiters to determine whether this thread is recyclied or not.
+      (let* ((busy-threads (recycling-taskmaster-busy-thread-count taskmaster)) ; reads again.
+             (all-threads (count-recycling-taskmaster-thread taskmaster))
              (listening-threads (- all-threads busy-threads)))
-        ;; Makes a thread if all threads are busy.
-        (when (<= listening-threads 0)
-          (make-parallel-acceptor-thread taskmaster))
-        ;; process the connection by itself.
-        (hunchentoot::handle-incoming-connection%
-         taskmaster
-         ;; Pass CLIENT-CONNECTION to the Hunchentoot handler and prevent close() here.
-         (shiftf client-connection nil))
-        ;; If shut-down while processing CLIENT-CONNECTION, return immediately.
-        (when (hunchentoot::acceptor-shutdown-p (hunchentoot::taskmaster-acceptor taskmaster))
-          (return-from hunchentoot:handle-incoming-connection))
-        ;; See waiters to determine whether this thread is recyclied or not.
-        (setf busy-threads (recycling-taskmaster-busy-thread-count taskmaster)
-              all-threads (count-recycling-taskmaster-thread taskmaster)
-              listening-threads (- all-threads busy-threads))
         (when (and
                ;; Someone is waiting -- means no pending connections.
                (plusp listening-threads)
