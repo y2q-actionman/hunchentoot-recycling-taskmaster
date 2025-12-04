@@ -32,6 +32,11 @@ On this benchmark, my HTTP handler *always sleeps for 0.1ms* to simulate some wo
 
 * How to use
 
+** About Lispworks
+
+On Lispworks, hunchentoot-recycling-taskmaster does not works because
+Hunchentoot on that does not handle a listen socket directly.
+
 * Benchmarking
 
 ** no keep-alive, sleep 0.1ms

@@ -93,17 +93,6 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
         (hash-table-count (hunchentoot::acceptor-process taskmaster)))
       (hash-table-count (hunchentoot::acceptor-process taskmaster))))
 
-(defmethod increment-recycling-taskmaster-busy-thread-count ((taskmaster recycling-taskmaster))
-  (bt2:atomic-integer-incf (recycling-taskmaster-busy-thread-count taskmaster)))
-
-(defmethod decrement-recycling-taskmaster-busy-thread-count ((taskmaster recycling-taskmaster))
-  (let ((rest (bt2:atomic-integer-decf (recycling-taskmaster-busy-thread-count taskmaster))))
-    (when (<= rest 0)
-      (hunchentoot::with-lock-held ((recycling-taskmaster-busy-thread-count-lock taskmaster))
-        (when (<= (bt2:atomic-integer-value (recycling-taskmaster-busy-thread-count taskmaster)) 0)
-          (hunchentoot::condition-variable-signal (recycling-taskmaster-busy-thread-count-queue taskmaster)))))
-    rest))
-
 (define-condition end-of-parallel-acceptor-thread (error)
   ()
   (:documentation "Thrown when parallel-acceptor-thread ends."))
@@ -153,6 +142,17 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
   (loop repeat (recycling-taskmaster-initial-thread-count taskmaster)
         do (make-parallel-acceptor-thread taskmaster)))
 
+(defmethod increment-recycling-taskmaster-busy-thread-count ((taskmaster recycling-taskmaster))
+  (bt2:atomic-integer-incf (recycling-taskmaster-busy-thread-count taskmaster)))
+
+(defmethod decrement-recycling-taskmaster-busy-thread-count ((taskmaster recycling-taskmaster))
+  (let ((rest (bt2:atomic-integer-decf (recycling-taskmaster-busy-thread-count taskmaster))))
+    (when (<= rest 0)
+      (hunchentoot::with-lock-held ((recycling-taskmaster-busy-thread-count-lock taskmaster))
+        (when (<= (bt2:atomic-integer-value (recycling-taskmaster-busy-thread-count taskmaster)) 0)
+          (hunchentoot::condition-variable-signal (recycling-taskmaster-busy-thread-count-queue taskmaster)))))
+    rest))
+
 (defmacro with-counting-busy-thread ((var) taskmaster &body body)
   "Executes BODY by incrementing busy-thread-count of TASKMASTER.
  Its value is bound to VAR."
@@ -197,6 +197,7 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
         (error 'end-of-parallel-acceptor-thread)))))
 
 (defmethod wait-end-of-handle-incoming-connection (taskmaster)
+  "Wait until no threads counted by the busy-thread-count slot of TASKMASTER."
   (when (plusp (bt2:atomic-integer-value (recycling-taskmaster-busy-thread-count taskmaster)))
     (hunchentoot::with-lock-held ((recycling-taskmaster-busy-thread-count-lock taskmaster))
       (when (plusp (bt2:atomic-integer-value (recycling-taskmaster-busy-thread-count taskmaster)))
@@ -263,6 +264,7 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
                (hunchentoot::acceptor-log-message acceptor :error "Wake-for-shutdown connect failed: ~A" e))))))
 
 (defmethod wait-for-recycling-taskmaster-shutdown (taskmaster)
+  "Wait until a recycling-taskmaster specified by TASKMASTER ends."
   (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
     (when (plusp (count-recycling-taskmaster-thread taskmaster :lock nil))
       (hunchentoot::condition-variable-wait
@@ -270,8 +272,8 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
        (recycling-taskmaster-acceptor-process-lock taskmaster)))))
 
 (defmethod hunchentoot:create-request-handler-thread ((taskmaster recycling-taskmaster) client-connection)
-  "This method is never called for `recycling-taskmaster'."
-  ;; See `make-parallel-acceptor-thread' instead.
+  "This method is never called for `recycling-taskmaster'. See
+`make-parallel-acceptor-thread' instead."
   (declare (ignore client-connection))
   (error "This method is not implemented for recycling-taskmaster."))
 

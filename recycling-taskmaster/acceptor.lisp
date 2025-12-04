@@ -62,11 +62,6 @@ the listen socket."
            client-connection))))))
 
 
-(defmethod hunchentoot::acceptor-server-name ((acceptor parallel-acceptor))
-  ;; FIXME: a good version string..
-  (format nil "hunchentoot-recycling-taskmaster 0.0.0 (experimental), based on ~A"
-          (call-next-method)))
-
 (defmethod kill ((acceptor parallel-acceptor))
   "To force an end of ACCEPTOR, destroy all threads and the listen
  socket *without* locking.  This function should not be called in
@@ -90,4 +85,3 @@ the listen socket."
 
 (defclass parallel-easy-ssl-acceptor (parallel-easy-acceptor parallel-ssl-acceptor)
   ())
-
