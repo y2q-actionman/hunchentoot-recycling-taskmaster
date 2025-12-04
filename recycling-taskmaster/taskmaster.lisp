@@ -155,7 +155,7 @@ Thread counter summary:
 
 (defmethod decrement-recycling-taskmaster-busy-thread-count ((taskmaster recycling-taskmaster))
   (let ((rest (bt2:atomic-integer-decf (recycling-taskmaster-busy-thread-count-cell taskmaster))))
-    (when (<= rest 0)
+    (when (<= rest 0)              ; a kind of double-checked locking.
       (hunchentoot::with-lock-held ((recycling-taskmaster-busy-thread-count-lock taskmaster))
         (when (<= (bt2:atomic-integer-value (recycling-taskmaster-busy-thread-count-cell taskmaster)) 0)
           (hunchentoot::condition-variable-signal (recycling-taskmaster-busy-thread-count-queue taskmaster)))))
@@ -207,14 +207,22 @@ Thread counter summary:
                (< (recycling-taskmaster-initial-thread-count taskmaster) all-threads))
           (error 'end-of-parallel-acceptor-thread))))))
 
-(defmethod wait-end-of-handle-incoming-connection (taskmaster)
+(defmethod hunchentoot:create-request-handler-thread ((taskmaster recycling-taskmaster) client-connection)
+  "This method is never called for `recycling-taskmaster'. See
+`make-parallel-acceptor-thread' instead."
+  (declare (ignore client-connection))
+  (error "This method is not implemented for recycling-taskmaster."))
+
+
+;;; Shutdown
+
+(defmethod wait-end-of-busy-threads (taskmaster)
   "Wait until no threads counted by the busy-thread-count slot of TASKMASTER."
-  (when (plusp (recycling-taskmaster-busy-thread-count taskmaster))
-    (hunchentoot::with-lock-held ((recycling-taskmaster-busy-thread-count-lock taskmaster))
-      (when (plusp (recycling-taskmaster-busy-thread-count taskmaster))
-        (hunchentoot::condition-variable-wait
-         (recycling-taskmaster-busy-thread-count-queue taskmaster)
-         (recycling-taskmaster-busy-thread-count-lock taskmaster))))))
+  (hunchentoot::with-lock-held ((recycling-taskmaster-busy-thread-count-lock taskmaster))
+    (when (plusp (recycling-taskmaster-busy-thread-count taskmaster))
+      (hunchentoot::condition-variable-wait
+       (recycling-taskmaster-busy-thread-count-queue taskmaster)
+       (recycling-taskmaster-busy-thread-count-lock taskmaster)))))
 
 (defmethod delete-recycling-taskmaster-finished-thread (taskmaster)
   "Delete dead threads kept in TASKMASTER accidentally."
@@ -254,7 +262,7 @@ Thread counter summary:
   ;;    -> done by `hunchentoot:stop' setting `hunchentoot::acceptor-shutdown-p'
   ;;
   ;; 2. Waits threads in `hunchentoot:handle-incoming-connection'.
-  (wait-end-of-handle-incoming-connection taskmaster)
+  (wait-end-of-busy-threads taskmaster)
   ;; 3. Wakes every threads waiting the listen socket, using
   ;; `wake-acceptor-for-shutdown-using-listen-socket'
   ;; 
@@ -282,11 +290,6 @@ Thread counter summary:
        (recycling-taskmaster-shutdown-queue taskmaster)
        (recycling-taskmaster-acceptor-process-lock taskmaster)))))
 
-(defmethod hunchentoot:create-request-handler-thread ((taskmaster recycling-taskmaster) client-connection)
-  "This method is never called for `recycling-taskmaster'. See
-`make-parallel-acceptor-thread' instead."
-  (declare (ignore client-connection))
-  (error "This method is not implemented for recycling-taskmaster."))
 
 (defmethod abandon-taskmaster ((taskmaster recycling-taskmaster))
   "Abandon all threads kept in TASKMASTER. This is a last resort
