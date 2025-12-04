@@ -99,36 +99,36 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
 
 (defmethod make-parallel-acceptor-thread ((taskmaster recycling-taskmaster))
   "Makes a new thread for `parallel-acceptor'."
-  (let* ((acceptor (hunchentoot:taskmaster-acceptor taskmaster))
-         (name-sig (format nil "~A:~A" (or (hunchentoot:acceptor-address acceptor) "*")
-                           (hunchentoot:acceptor-port acceptor)))
-         (name (format nil (hunchentoot::taskmaster-worker-thread-name-format taskmaster)
-                       name-sig)))
+  (let ((acceptor (hunchentoot:taskmaster-acceptor taskmaster)))
     (flet ((thunk ()
-             (handler-bind
-                 ((end-of-parallel-acceptor-thread
-                    (lambda (&optional e)
-                      (return-from thunk e)))
-                  (error
-                    (lambda (&optional e)
-                      (when (and
-                             (hunchentoot::with-lock-held
-                                 ((hunchentoot::acceptor-shutdown-lock acceptor))
-                               (hunchentoot::acceptor-shutdown-p acceptor))
-                             (let ((sock (hunchentoot::acceptor-listen-socket acceptor)))
-                               (or (null sock) ; may be nil if already closed.
-                                   (not (open-stream-p sock)))))
-                        ;; Here, our server was shutdown so the listen
-                        ;; socket was closed by the one of
-                        ;; parallel-acceptors.  accept(2) to a closed
-                        ;; socket may cause EBADF.
-                        (return-from thunk e))
-                      ;; otherwise, decline.
-                      )))
-               (unwind-protect
-                    (hunchentoot:accept-connections acceptor)
-                 (remove-recycling-taskmaster-thread taskmaster (bt:current-thread))))))
-      (let ((thread (hunchentoot:start-thread taskmaster #'thunk :name name)))
+             (unwind-protect
+                  (handler-bind
+                      ((end-of-parallel-acceptor-thread
+                         (lambda (&optional e)
+                           (return-from thunk e)))
+                       (error
+                         (lambda (&optional e)
+                           (when (and
+                                  (hunchentoot::with-lock-held
+                                      ((hunchentoot::acceptor-shutdown-lock acceptor))
+                                    (hunchentoot::acceptor-shutdown-p acceptor))
+                                  (let ((sock (hunchentoot::acceptor-listen-socket acceptor)))
+                                    (or (null sock) ; may be nil if already closed.
+                                        (not (open-stream-p sock)))))
+                             ;; Here, our server was shutdown so the listen
+                             ;; socket was closed by the one of
+                             ;; parallel-acceptors.  accept(2) to a closed
+                             ;; socket may cause EBADF.
+                             (return-from thunk e))
+                           ;; otherwise, decline.
+                           )))
+                    (hunchentoot:accept-connections acceptor))
+               (remove-recycling-taskmaster-thread taskmaster (bt:current-thread)))))
+      (let* ((name-sig (format nil "~A:~A" (or (hunchentoot:acceptor-address acceptor) "*")
+                               (hunchentoot:acceptor-port acceptor)))
+             (name (format nil (hunchentoot::taskmaster-worker-thread-name-format taskmaster)
+                           name-sig))
+             (thread (hunchentoot:start-thread taskmaster #'thunk :name name)))
         (add-recycling-taskmaster-thread taskmaster thread)))))
 
 (defmethod hunchentoot:execute-acceptor :before ((taskmaster recycling-taskmaster))
