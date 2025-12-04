@@ -22,11 +22,11 @@
 
 ;;; Broken?
 (defclass atomic-thread-count-recycling-taskmaster (recycling-taskmaster)
-  ((thread-count
+  ((hunchentoot-recycling-taskmaster::thread-count
     :initform (bt2:make-atomic-integer)
     :reader recycling-taskmaster-thread-count
     :documentation "The number of how many threads running. This is same with the number of keys in acceptor-process slot, but splited to avoid locking.")
-   (shutdown-queue-lock
+   (hunchentoot-recycling-taskmaster::shutdown-queue-lock ; Suspicious!
     :initform (hunchentoot::make-lock "shutdown-queue-lock")
     :reader recycling-taskmaster-shutdown-queue-lock
     :documentation

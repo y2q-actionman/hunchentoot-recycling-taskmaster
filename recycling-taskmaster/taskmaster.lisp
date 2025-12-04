@@ -27,19 +27,7 @@
     :initform (bt2:make-atomic-integer)
     :accessor recycling-taskmaster-busy-thread-count-cell
     :documentation
-    "The number of threads working on `hunchentoot:handle-incoming-connection'.
-
-Thread states:
- - Waiting on the listen socket.
-   In `hunchentoot:accept-connections', out of `hunchentoot:handle-incoming-connection'.
-
-- Checking thread numbers.
-  In our `hunchentoot:handle-incoming-connection', out of `hunchentoot:handle-incoming-connection%'.
-  Counted by this`busy-thread-count'.
-
-- Handling client connections
-  In `hunchentoot:handle-incoming-connection%'.
-  Counted by hunchentoot's original slots.")
+    "The number of threads working on `hunchentoot:handle-incoming-connection'.")
    (busy-thread-count-lock
     :initform (hunchentoot::make-lock "recycling-taskmaster-busy-thread-count-lock")
     :reader recycling-taskmaster-busy-thread-count-lock
@@ -51,11 +39,29 @@ Thread states:
     :documentation
     "A condition variable to wait for the ends of client connections, locked by busy-thread-count-lock."))
   (:documentation "A taskmaster works like
-`hunchentoot:one-thread-per-connection-taskmaster' except recycing a
-thread when there is a pending connecton.
+`hunchentoot:one-thread-per-connection-taskmaster' except recycling
+threads when there is a pending connecton.
 
 MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
-`hunchentoot:one-thread-per-connection-taskmaster'."))
+`hunchentoot:one-thread-per-connection-taskmaster'.
+
+Thread counter summary:
+
+- `busy-thread-count-cell' counts threads working on the accepted
+  connection, in our `hunchentoot:handle-incoming-connection'.
+
+  `hunchentoot:taskmaster-thread-count' and
+  `hunchentoot:taskmaster-accept-count' are subsets of this.
+
+- The count of all threads is computed by
+    (hash-table-count hunchentoot::acceptor-process).
+  Its lower bound is in `INITIAL-THREAD-COUNT' slot.
+
+- Threads waiting on the listen socket can be computed by (-
+  all-threads-count busy-thread-count).  They are in
+  `hunchentoot:accept-connections' out of
+  `hunchentoot:handle-incoming-connection'.
+"))
 
 
 (defmethod cl:initialize-instance :after ((taskmaster recycling-taskmaster) &rest init-args)
@@ -102,27 +108,26 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
   (let ((acceptor (hunchentoot:taskmaster-acceptor taskmaster)))
     (flet ((thunk ()
              (unwind-protect
-                  (handler-bind
-                      ((end-of-parallel-acceptor-thread
-                         (lambda (&optional e)
-                           (return-from thunk e)))
-                       (error
-                         (lambda (&optional e)
-                           (when (and
-                                  (hunchentoot::with-lock-held
-                                      ((hunchentoot::acceptor-shutdown-lock acceptor))
-                                    (hunchentoot::acceptor-shutdown-p acceptor))
-                                  (let ((sock (hunchentoot::acceptor-listen-socket acceptor)))
-                                    (or (null sock) ; may be nil if already closed.
-                                        (not (open-stream-p sock)))))
-                             ;; Here, our server was shutdown so the listen
-                             ;; socket was closed by the one of
-                             ;; parallel-acceptors.  accept(2) to a closed
-                             ;; socket may cause EBADF.
-                             (return-from thunk e))
-                           ;; otherwise, decline.
-                           )))
-                    (hunchentoot:accept-connections acceptor))
+                  (handler-case
+                      (hunchentoot:accept-connections acceptor)
+                    (end-of-parallel-acceptor-thread (e)
+                      e)
+                    (error (e)
+                      (when (and
+                             (hunchentoot::with-lock-held
+                                 ((hunchentoot::acceptor-shutdown-lock acceptor))
+                               (hunchentoot::acceptor-shutdown-p acceptor))
+                             (let ((sock (hunchentoot::acceptor-listen-socket acceptor)))
+                               (or (null sock) ; may be nil if already closed.
+                                   (not (open-stream-p sock)))))
+                        ;; Here, our server was shutdown so the listen
+                        ;; socket was closed by the one of
+                        ;; parallel-acceptors.  accept(2) to a closed
+                        ;; socket may cause EBADF.
+                        (return-from thunk e))
+                      ;; otherwise, rethrow it.
+                      (error e)))
+               ;; For tracking threads at the end, removing from table is deferred to here.
                (remove-recycling-taskmaster-thread taskmaster (bt:current-thread)))))
       (let* ((name-sig (format nil "~A:~A" (or (hunchentoot:acceptor-address acceptor) "*")
                                (hunchentoot:acceptor-port acceptor)))
@@ -179,9 +184,9 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
       (return-from hunchentoot:handle-incoming-connection))
     (with-counting-busy-thread (busy-threads) taskmaster
       (let* ((all-threads (count-recycling-taskmaster-thread taskmaster))
-             (accepting-threads (- all-threads busy-threads)))
+             (listening-threads (- all-threads busy-threads)))
         ;; Makes a thread if all threads are busy.
-        (when (<= accepting-threads 0) 
+        (when (<= listening-threads 0)
           (make-parallel-acceptor-thread taskmaster))
         ;; process the connection by itself.
         (hunchentoot::handle-incoming-connection%
@@ -194,10 +199,10 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
         ;; See waiters to determine whether this thread is recyclied or not.
         (setf busy-threads (recycling-taskmaster-busy-thread-count taskmaster)
               all-threads (count-recycling-taskmaster-thread taskmaster)
-              accepting-threads (- all-threads busy-threads)) ; FIXME
+              listening-threads (- all-threads busy-threads))
         (when (and
                ;; Someone is waiting -- means no pending connections.
-               (plusp accepting-threads)
+               (plusp listening-threads)
                ;; and there are enough other threads.
                (< (recycling-taskmaster-initial-thread-count taskmaster) all-threads))
           (error 'end-of-parallel-acceptor-thread))))))
