@@ -6,7 +6,6 @@
   :pathname #.(make-pathname :directory '(:relative "recycling-taskmaster"))
   :serial t
   :components ((:file "package")
-               (:file "hunchentoot-compat")
                (:file "taskmaster")
                (:file "acceptor"))
   :in-order-to ((test-op (test-op #:hunchentoot-recycling-taskmaster-test))))

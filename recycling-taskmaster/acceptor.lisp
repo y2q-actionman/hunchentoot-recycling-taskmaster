@@ -22,7 +22,7 @@
 (defmethod hunchentoot:stop ((acceptor parallel-acceptor) &key soft)
   "This works like the parental method, except some works for sharing
 the listen socket."
-  (with-lock-held ((hunchentoot::acceptor-shutdown-lock acceptor))
+  (hunchentoot::with-lock-held ((hunchentoot::acceptor-shutdown-lock acceptor))
     (setf (hunchentoot::acceptor-shutdown-p acceptor) t))
   (let ((taskmaster (hunchentoot::acceptor-taskmaster acceptor)))
     (hunchentoot:shutdown taskmaster)
@@ -44,7 +44,7 @@ the listen socket."
   (let ((listener (hunchentoot::acceptor-listen-socket acceptor)))
     (usocket:with-mapped-conditions (listener)
       (loop
-        (with-lock-held ((hunchentoot::acceptor-shutdown-lock acceptor))
+        (hunchentoot::with-lock-held ((hunchentoot::acceptor-shutdown-lock acceptor))
           (when (hunchentoot::acceptor-shutdown-p acceptor)
             (return)))
         ;; I think `usocket:wait-for-input' is not required because it
