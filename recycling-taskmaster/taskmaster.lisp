@@ -287,7 +287,8 @@ MAX-THREAD-COUNT and MAX-ACCEPT-COUNT works same as
           do (typecase thread
                (bt2:thread
                 (bt2:error-in-thread thread 'end-of-parallel-acceptor-thread))
-               (otherwise
+               (otherwise               ; bt1 thread object.
                 (bt:interrupt-thread thread (lambda () (error 'end-of-parallel-acceptor-thread)))))
+             ;; Remove THREAD if it held in TASKMASTER.
           if (remove-recycling-taskmaster-thread taskmaster thread)
             count it)))
