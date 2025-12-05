@@ -47,7 +47,7 @@
 (defparameter *test-keep-alive* t)
 (defparameter *test-no-keep-alive* t)
 
-(defparameter *sleep-seconds* 0)        ; or 0.001. TODO: add Wookie support.
+(defconstant +sleep-seconds+ 0)        ; or 0.001. TODO: add Wookie support.
 
 (defun run-wrk (host filename)
   (with-open-file (*standard-output* filename :direction :output :if-exists :rename)
@@ -75,8 +75,12 @@
 
 ;;; Hunchentoot
 
+(defun handler-small-sleep ()
+  (when (plusp +sleep-seconds+)
+    (sleep +sleep-seconds+)))
+
 (hunchentoot:define-easy-handler (say-yo :uri "/yo") (name)
-  (sleep *sleep-seconds*)
+  (handler-small-sleep)
   (setf (hunchentoot:content-type*) "text/plain")
   (format nil "Hey~@[ ~A~]!" name))
 
@@ -248,7 +252,7 @@
     server))
 
 ;;; Wookie
-;;; TODO: take *sleep-seconds*
+;;; TODO: take +sleep-seconds+
 
 (defun wait-for-starting-server ()
   (sleep 1))
@@ -276,7 +280,7 @@
                  (woo:run
                   (lambda (env)
                     (declare (ignore env))
-                    (sleep *sleep-seconds*)
+                    (handler-small-sleep)
                     '(200 (:content-type "text/plain") ("Hello, World")))
                   :worker-num threads))
     as server-thread = (bt:make-thread
@@ -292,7 +296,7 @@
     (declare (ignore _env))
     (lambda (callback)
       ;; This is works, but no meaning to sleep.
-      (sleep *sleep-seconds*)
+      (handler-small-sleep)
       (funcall callback '(200 (:content-type "text/plain") ("Hello, World"))))))
 
 (defun bench-woo-callback (&optional (threads-list '(nil)))
@@ -340,7 +344,7 @@
 ;;; House
 
 (house:define-handler (hello-world :content-type "text/plain") ()
-  (sleep *sleep-seconds*)
+  (handler-small-sleep)
   "Hello world!")
 
 (defun bench-house ()
@@ -359,7 +363,7 @@
 (defclass hello () ())
 
 (defmethod conserv.http:on-http-request ((driver hello))
-  (sleep *sleep-seconds*)
+  (handler-small-sleep)
   (conserv.http:set-headers conserv.http:*request* :content-type "text/html")
   (format conserv.http:*request* "<h1>Hello, world!</h1>")
   (close conserv.http:*request*))
