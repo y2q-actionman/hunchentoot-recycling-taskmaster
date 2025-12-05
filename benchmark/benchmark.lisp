@@ -20,6 +20,10 @@
 ;;; sudo apt install libev-dev
 ;;; https://lisp-journey.gitlab.io/blog/why-turtl-switched-from-lisp-to-js/
 ;;; https://news.ycombinator.com/item?id=29019217
+;;; ????
+;;; https://github.com/TechEmpower/FrameworkBenchmarks/blob/master/frameworks/Lisp/woo/woo.ros
+;; https://www.reddit.com/r/Common_Lisp/comments/1hmxv4k/comment/m4feb4b/
+
 
 (ql:quickload "house")
 
@@ -39,8 +43,11 @@
     (parse-integer nproc-str)))
 
 (defparameter *nproc* (nproc))
-
 (defparameter *wrk-duration* 10)
+(defparameter *test-keep-alive* t)
+(defparameter *test-no-keep-alive* t)
+
+(defparameter *sleep-seconds* 0)        ; or 0.001. TODO: add Wookie support.
 
 (defun run-wrk (host filename)
   (with-open-file (*standard-output* filename :direction :output :if-exists :rename)
@@ -60,18 +67,16 @@
                (uiop:run-program (list* "wrk" options) :output t))
              (terpri)
              (finish-output)))
-      (run-tcd 4 100 t)
-      ;; (run-tcd 4 100 nil)
-      (run-tcd 4 10 t)
-      ;; (run-tcd 4 10 nil)
-      (run-tcd 16 400 t)
-      ;; (run-tcd 16 400 nil)
-      )))
+      (loop for (threads connections) in '((4 100) (4 10) (16 400))
+            if *test-keep-alive*
+              do (run-tcd threads connections t)
+            if *test-no-keep-alive*
+              do (run-tcd threads connections nil)))))
 
 ;;; Hunchentoot
 
 (hunchentoot:define-easy-handler (say-yo :uri "/yo") (name)
-  (sleep 0.001)
+  (sleep *sleep-seconds*)
   (setf (hunchentoot:content-type*) "text/plain")
   (format nil "Hey~@[ ~A~]!" name))
 
@@ -243,13 +248,17 @@
     server))
 
 ;;; Wookie
+;;; TODO: take *sleep-seconds*
+
+(defun wait-for-starting-server ()
+  (sleep 1))
 
 (defun bench-wookie ()
   (let ((server-thread
           (bt:make-thread
            #'wookie-helper:start-static-server ; I found it in wookie-helper package.
            :name "Wookie server thread")))
-    (sleep 1)                           ; wait for starting
+    (wait-for-starting-server)
     (unwind-protect
          (run-wrk "http://localhost:8080" "wookie_default.log")
       (bt:destroy-thread server-thread))
@@ -267,12 +276,13 @@
                  (woo:run
                   (lambda (env)
                     (declare (ignore env))
+                    (sleep *sleep-seconds*)
                     '(200 (:content-type "text/plain") ("Hello, World")))
                   :worker-num threads))
     as server-thread = (bt:make-thread
                         thunk :name (format nil "Woo server thread ~A" threads))
     collect server-thread
-    do (sleep 1)                           ; wait for starting
+    do (wait-for-starting-server)
        (unwind-protect
             (run-wrk "http://localhost:5000" logname)
          (bt:destroy-thread server-thread))))
@@ -281,18 +291,9 @@
   (lambda (_env)
     (declare (ignore _env))
     (lambda (callback)
-      (describe callback)
-      (describe woo.ev:*evloop*)
-      
-      ;; (funcall callback '(200 (:content-type "text/plain") ("Hello, World")))
-      
-      (let ((evloop woo.ev:*evloop*))
-        (bt:make-thread (lambda (&aux (woo.ev:*evloop* 0))
-                          (describe evloop)
-                          (describe woo.ev:*evloop*)
-                          (funcall callback '(200 (:content-type "text/plain") ("Hello, World"))))))
-
-      (princ "end!" *standard-output*))))
+      ;; This is works, but no meaning to sleep.
+      (sleep *sleep-seconds*)
+      (funcall callback '(200 (:content-type "text/plain") ("Hello, World"))))))
 
 (defun bench-woo-callback (&optional (threads-list '(nil)))
   (loop
@@ -306,15 +307,13 @@
     as server-thread = (bt:make-thread
                         thunk :name (format nil "Woo server thread ~A" threads))
     collect server-thread
-    do (sleep 1)                           ; wait for starting
+    do (wait-for-starting-server)
        (unwind-protect
             (run-wrk "http://localhost:5000" logname)
          (bt:destroy-thread server-thread))))
 
-;;; ????
-;;; https://github.com/TechEmpower/FrameworkBenchmarks/blob/master/frameworks/Lisp/woo/woo.ros
-;; https://www.reddit.com/r/Common_Lisp/comments/1hmxv4k/comment/m4feb4b/
-
+      
+;; Making a thread like below don't works because `*EVLOOP*' is NIL.
 ;; (defparameter *woo-callback-threads-app*
 ;;   (lambda (_env)
 ;;     (declare (ignore _env))
@@ -322,13 +321,18 @@
 ;;       (bt:make-thread (lambda ()
 ;;                         (funcall callback '(200 (:content-type "text/plain") ("Hello, World"))))))))
 
+;; Binding like that does not works also.
+;; (let ((evloop woo.ev:*evloop*))
+;;   (bt:make-thread (lambda (&aux (woo.ev:*evloop* evloop))
+;;                     (funcall callback '(200 (:content-type "text/plain") ("Hello, World"))))))
+
 ;; (defun bench-woo-callback-threads (&optional (threads-list '(nil)))
 ;;   (loop
 ;;     for threads in threads-list
 ;;     as logname = (format nil "woo-callback_threads-~D~@[-default~*~].log"
 ;;                          threads (eql threads nil))
 ;;     as server = (clack:clackup *woo-callback-threads-app* :server :woo)
-;;     do (sleep 1)                        ; wait for starting
+;;     do (wait-for-starting-server)
 ;;        (unwind-protect
 ;;             (run-wrk "http://localhost:5000" logname)
 ;;          (clack:stop server))))
@@ -336,6 +340,7 @@
 ;;; House
 
 (house:define-handler (hello-world :content-type "text/plain") ()
+  (sleep *sleep-seconds*)
   "Hello world!")
 
 (defun bench-house ()
@@ -343,7 +348,7 @@
           (bt:make-thread
            (lambda () (house:start 4040))
            :name "House server thread")))
-    (sleep 1)                           ; wait for starting
+    (wait-for-starting-server)
     (unwind-protect
          (run-wrk "http://localhost:4040" "house_default.log")
       (bt:destroy-thread server-thread))
@@ -354,6 +359,7 @@
 (defclass hello () ())
 
 (defmethod conserv.http:on-http-request ((driver hello))
+  (sleep *sleep-seconds*)
   (conserv.http:set-headers conserv.http:*request* :content-type "text/html")
   (format conserv.http:*request* "<h1>Hello, world!</h1>")
   (close conserv.http:*request*))
@@ -368,7 +374,7 @@
 ;;         (bt:make-thread
 ;;          (lambda () (house:start 4040))
 ;;          :name "House server thread")))
-;;   (sleep 1)                             ; wait for starting
+;;   (wait-for-starting-server)
 ;;   (unwind-protect
 ;;        (run-wrk "http://localhost:4040" "house_default.log")
 ;;     (bt:destroy-thread server-thread))
