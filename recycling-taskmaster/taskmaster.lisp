@@ -215,10 +215,10 @@ Thread counter summary:
 (defmethod wait-end-of-busy-threads (taskmaster)
   "Wait until no threads counted by the busy-thread-count slot of TASKMASTER."
   (hunchentoot::with-lock-held ((recycling-taskmaster-busy-thread-count-lock taskmaster))
-    (when (plusp (recycling-taskmaster-busy-thread-count taskmaster))
-      (hunchentoot::condition-variable-wait
-       (recycling-taskmaster-busy-thread-count-queue taskmaster)
-       (recycling-taskmaster-busy-thread-count-lock taskmaster)))))
+    (loop while (plusp (recycling-taskmaster-busy-thread-count taskmaster))
+          do (hunchentoot::condition-variable-wait
+              (recycling-taskmaster-busy-thread-count-queue taskmaster)
+              (recycling-taskmaster-busy-thread-count-lock taskmaster)))))
 
 (defmethod delete-recycling-taskmaster-finished-thread (taskmaster)
   "Delete dead threads kept in TASKMASTER accidentally."
@@ -281,10 +281,10 @@ Thread counter summary:
 (defmethod wait-for-recycling-taskmaster-shutdown (taskmaster)
   "Wait until a recycling-taskmaster specified by TASKMASTER ends."
   (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
-    (when (plusp (count-recycling-taskmaster-thread taskmaster :lock nil))
-      (hunchentoot::condition-variable-wait
-       (recycling-taskmaster-shutdown-queue taskmaster)
-       (recycling-taskmaster-acceptor-process-lock taskmaster)))))
+    (loop while (plusp (count-recycling-taskmaster-thread taskmaster :lock nil))
+          do (hunchentoot::condition-variable-wait
+              (recycling-taskmaster-shutdown-queue taskmaster)
+              (recycling-taskmaster-acceptor-process-lock taskmaster)))))
 
 
 (defmethod abandon-taskmaster ((taskmaster recycling-taskmaster))
