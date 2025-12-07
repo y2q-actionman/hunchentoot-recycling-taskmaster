@@ -171,6 +171,8 @@ Thread counter summary:
             (progn ,@body)
          (decrement-recycling-taskmaster-busy-thread-count ,taskmaster_)))))
 
+(defconstant +minimum-accepting-thread-count+ 1)
+
 (defmethod hunchentoot:handle-incoming-connection ((taskmaster recycling-taskmaster) client-connection)
   "This function is the core of `recycling-taskmaster'. It is called
  in the loop of `hunchentoot:accept-connections' on every
@@ -181,7 +183,7 @@ Thread counter summary:
       ;; Makes a thread if all threads are busy.
       (let* ((all-threads (count-recycling-taskmaster-thread taskmaster))
              (listening-threads (- all-threads busy-threads)))
-        (when (<= listening-threads 0)
+        (when (< listening-threads +minimum-accepting-thread-count+)
           (make-parallel-acceptor-thread taskmaster)))
       ;; process the connection by itself.
       (hunchentoot::handle-incoming-connection%
@@ -194,7 +196,7 @@ Thread counter summary:
              (listening-threads (- all-threads busy-threads)))
         (when (and
                ;; Someone is waiting -- means no pending connections.
-               (plusp listening-threads)
+               (>= listening-threads +minimum-accepting-thread-count+)
                ;; and there are enough other threads.
                (< (recycling-taskmaster-initial-thread-count taskmaster) all-threads))
           (error 'end-of-parallel-acceptor-thread))))))
