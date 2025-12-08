@@ -121,7 +121,6 @@ Thread counter summary:
   "Makes a new thread for `parallel-acceptor'."
   (let ((acceptor (hunchentoot:taskmaster-acceptor taskmaster)))
     (flet ((thunk ()
-             (increment-recycling-taskmaster-accepting-thread-count taskmaster)
              (unwind-protect
                   (handler-case
                       (hunchentoot:accept-connections acceptor)
@@ -150,7 +149,8 @@ Thread counter summary:
              (name (format nil (hunchentoot::taskmaster-worker-thread-name-format taskmaster)
                            name-sig))
              (thread (hunchentoot:start-thread taskmaster #'thunk :name name)))
-        (add-recycling-taskmaster-thread taskmaster thread)))))
+        (add-recycling-taskmaster-thread taskmaster thread)
+        (increment-recycling-taskmaster-accepting-thread-count taskmaster)))))
 
 (defmethod hunchentoot:execute-acceptor :before ((taskmaster recycling-taskmaster))
   "Checks the type of ACCEPTOR slot, because recycling-taskmaster needs
