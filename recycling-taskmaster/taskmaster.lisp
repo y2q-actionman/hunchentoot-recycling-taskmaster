@@ -93,15 +93,19 @@ Thread counter summary:
 (defmethod decrement-recycling-taskmaster-accepting-thread-count ((taskmaster recycling-taskmaster))
   (bt2:atomic-integer-decf (recycling-taskmaster-accepting-thread-count-cell taskmaster)))
 
-(defmethod add-recycling-taskmaster-thread (taskmaster thread)
+(defmethod add-recycling-taskmaster-thread (taskmaster thread-list)
   (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
     (let ((table (hunchentoot::acceptor-process taskmaster)))
-      (setf (gethash thread table) t))))
+      (loop for thread in thread-list
+            do (setf (gethash thread table) t)))))
 
-(defmethod remove-recycling-taskmaster-thread (taskmaster thread)
+(defmethod remove-recycling-taskmaster-thread (taskmaster thread-list)
   (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
-    (let* ((table (hunchentoot::acceptor-process taskmaster))
-           (deleted? (remhash thread table)))
+    (let ((table (hunchentoot::acceptor-process taskmaster))
+          (deleted? nil))
+      (loop for thread in thread-list
+            when (remhash thread table)
+              do (setf deleted? t))
       (when (and deleted?
                  (<= (hash-table-count table) 0))
         (hunchentoot::condition-variable-signal (recycling-taskmaster-shutdown-queue taskmaster)))
@@ -117,7 +121,7 @@ Thread counter summary:
   ()
   (:documentation "Thrown when parallel-acceptor-thread ends."))
 
-(defmethod make-parallel-acceptor-thread ((taskmaster recycling-taskmaster))
+(defmethod make-parallel-acceptor-thread ((taskmaster recycling-taskmaster) count)
   "Makes a new thread for `parallel-acceptor'."
   (let ((acceptor (hunchentoot:taskmaster-acceptor taskmaster)))
     (flet ((thunk ()
@@ -143,14 +147,23 @@ Thread counter summary:
                       (error e)))
                (decrement-recycling-taskmaster-accepting-thread-count taskmaster)
                ;; For tracking threads at the end, removing from table is deferred to here.
-               (remove-recycling-taskmaster-thread taskmaster (bt:current-thread)))))
+               (remove-recycling-taskmaster-thread taskmaster (list (bt:current-thread))))))
       (let* ((name-sig (format nil "~A:~A" (or (hunchentoot:acceptor-address acceptor) "*")
                                (hunchentoot:acceptor-port acceptor)))
              (name (format nil (hunchentoot::taskmaster-worker-thread-name-format taskmaster)
-                           name-sig))
-             (thread (hunchentoot:start-thread taskmaster #'thunk :name name)))
-        (add-recycling-taskmaster-thread taskmaster thread)
-        (increment-recycling-taskmaster-accepting-thread-count taskmaster)))))
+                           name-sig)))
+        (loop repeat count
+              as thread = (hunchentoot:start-thread taskmaster #'thunk :name name)
+              do (add-recycling-taskmaster-thread taskmaster (list thread))
+		 (increment-recycling-taskmaster-accepting-thread-count taskmaster))
+        #+ ()
+        (loop repeat count
+              collect (hunchentoot:start-thread taskmaster #'thunk :name name)
+                into thread-list
+	      and do (increment-recycling-taskmaster-accepting-thread-count taskmaster)
+              finally
+                 (return
+                   (add-recycling-taskmaster-thread taskmaster thread-list)))))))
 
 (defmethod hunchentoot:execute-acceptor :before ((taskmaster recycling-taskmaster))
   "Checks the type of ACCEPTOR slot, because recycling-taskmaster needs
@@ -160,8 +173,8 @@ Thread counter summary:
 
 (defmethod hunchentoot:execute-acceptor ((taskmaster recycling-taskmaster))
   "Make initial threads working on `parallel-acceptor'."
-  (loop repeat (recycling-taskmaster-initial-thread-count taskmaster)
-        do (make-parallel-acceptor-thread taskmaster)))
+  (make-parallel-acceptor-thread taskmaster
+                                 (recycling-taskmaster-initial-thread-count taskmaster)))
 
 (defmethod recycling-taskmaster-busy-thread-count ((taskmaster recycling-taskmaster))
   (bt2:atomic-integer-value (recycling-taskmaster-busy-thread-count-cell taskmaster)))
@@ -187,7 +200,7 @@ Thread counter summary:
             (progn ,@body)
          (decrement-recycling-taskmaster-busy-thread-count ,taskmaster_)))))
 
-(defconstant +minimum-accepting-thread-count+ 1)
+(defconstant +minimum-accepting-thread-count+ 2)
 
 (defmacro with-counting-accepting-thread ((var) taskmaster &body body)
   "Executes BODY by decrementing accepting-thread-count of TASKMASTER.
@@ -213,7 +226,8 @@ Thread counter summary:
       ;;   (when (< listening-threads +minimum-accepting-thread-count+)
       ;;     (make-parallel-acceptor-thread taskmaster)))
       (when (< accepting-threads +minimum-accepting-thread-count+)
-        (make-parallel-acceptor-thread taskmaster))
+        (make-parallel-acceptor-thread taskmaster
+                                       (- +minimum-accepting-thread-count+ accepting-threads)))
       ;; process the connection by itself.
       (hunchentoot::handle-incoming-connection%
        taskmaster
@@ -322,18 +336,24 @@ Thread counter summary:
               (recycling-taskmaster-acceptor-process-lock taskmaster)))))
 
 
-(defmethod abandon-taskmaster ((taskmaster recycling-taskmaster))
+(defmethod abandon-taskmaster ((taskmaster recycling-taskmaster) &key (lock t))
   "Abandon all threads kept in TASKMASTER. This is a last resort
  for handling corrupted taskmaster objects."
-  ;; see the table without locking intentionally.
-  (let* ((table (hunchentoot::acceptor-process taskmaster))
-         (thread-list (hash-table-keys table)))
-    (loop for thread in thread-list
-          do (typecase thread
-               (bt2:thread
-                (bt2:error-in-thread thread 'end-of-parallel-acceptor-thread))
-               (otherwise               ; bt1 thread object.
-                (bt:interrupt-thread thread (lambda () (error 'end-of-parallel-acceptor-thread)))))
-             ;; Remove THREAD if it held in TASKMASTER.
-          if (remove-recycling-taskmaster-thread taskmaster thread)
-            count it)))
+  (flet ((steal-threads ()
+           (prog1 (hash-table-keys (hunchentoot::acceptor-process taskmaster))
+             (clrhash (hunchentoot::acceptor-process taskmaster))
+             (hunchentoot::condition-variable-signal
+              (recycling-taskmaster-shutdown-queue taskmaster)))))
+    (loop
+      with thread-list
+        = (if lock
+              (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
+                (steal-threads))
+              (steal-threads))
+      for thread in thread-list
+      collect
+      (typecase thread
+        (bt2:thread
+         (bt2:error-in-thread thread 'end-of-parallel-acceptor-thread))
+        (otherwise                      ; bt1 thread object.
+         (bt:interrupt-thread thread (lambda () (error 'end-of-parallel-acceptor-thread))))))))

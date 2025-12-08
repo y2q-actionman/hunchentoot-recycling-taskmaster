@@ -62,19 +62,23 @@ the listen socket."
            client-connection))))))
 
 
-(defmethod kill ((acceptor parallel-acceptor))
+(defmethod kill ((acceptor parallel-acceptor) &key (lock t))
   "To force an end of ACCEPTOR, destroy all threads and the listen
- socket *without* locking.  This function should not be called in
- production (but required for my debugging)."
-  (with-accessors ((shutdown-p hunchentoot::acceptor-shutdown-p)
+socket. If LOCK is nil, this is done *without* locking.  This function
+should not be called in production (but required for my debugging)."
+  (with-accessors ((shutdown-lock hunchentoot::acceptor-shutdown-lock)
+                   (shutdown-p hunchentoot::acceptor-shutdown-p)
                    (listen-socket hunchentoot::acceptor-listen-socket))
       acceptor
-    (setf shutdown-p t)
+    (if lock
+        (hunchentoot::with-lock-held (shutdown-lock)
+          (setf shutdown-p t))
+        (setf shutdown-p t))
     (when listen-socket
       (ignore-errors
        (usocket:socket-close listen-socket))
       (setf listen-socket nil)))
-  (abandon-taskmaster (hunchentoot::acceptor-taskmaster acceptor)))
+  (abandon-taskmaster (hunchentoot::acceptor-taskmaster acceptor) :lock lock))
 
 ;;; Derived classes
 (defclass parallel-ssl-acceptor (parallel-acceptor hunchentoot:ssl-acceptor)
