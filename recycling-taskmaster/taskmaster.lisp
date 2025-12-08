@@ -298,18 +298,24 @@ Thread counter summary:
               (recycling-taskmaster-acceptor-process-lock taskmaster)))))
 
 
-(defmethod abandon-taskmaster ((taskmaster recycling-taskmaster))
+(defmethod abandon-taskmaster ((taskmaster recycling-taskmaster) &key (lock t))
   "Abandon all threads kept in TASKMASTER. This is a last resort
  for handling corrupted taskmaster objects."
-  ;; see the table without locking intentionally.
-  (let* ((table (hunchentoot::acceptor-process taskmaster))
-         (thread-list (hash-table-keys table)))
-    (loop for thread in thread-list
-          do (typecase thread
-               (bt2:thread
-                (bt2:error-in-thread thread 'end-of-parallel-acceptor-thread))
-               (otherwise               ; bt1 thread object.
-                (bt:interrupt-thread thread (lambda () (error 'end-of-parallel-acceptor-thread)))))
-             ;; Remove THREAD if it held in TASKMASTER.
-          if (remove-recycling-taskmaster-thread taskmaster (list thread)) ;FIXME
-            count it)))
+  (flet ((steal-threads ()
+           (prog1 (hash-table-keys (hunchentoot::acceptor-process taskmaster))
+             (clrhash (hunchentoot::acceptor-process taskmaster))
+             (hunchentoot::condition-variable-signal
+              (recycling-taskmaster-shutdown-queue taskmaster)))))
+    (loop
+      with thread-list
+        = (if lock
+              (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
+                (steal-threads))
+              (steal-threads))
+      for thread in thread-list
+      collect
+      (typecase thread
+        (bt2:thread
+         (bt2:error-in-thread thread 'end-of-parallel-acceptor-thread))
+        (otherwise                      ; bt1 thread object.
+         (bt:interrupt-thread thread (lambda () (error 'end-of-parallel-acceptor-thread))))))))
