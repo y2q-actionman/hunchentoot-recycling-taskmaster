@@ -87,8 +87,8 @@ Thread counter summary:
 (defmethod recycling-taskmaster-accepting-thread-count ((taskmaster recycling-taskmaster))
   (bt2:atomic-integer-value (recycling-taskmaster-accepting-thread-count-cell taskmaster)))
 
-(defmethod increment-recycling-taskmaster-accepting-thread-count ((taskmaster recycling-taskmaster))
-  (bt2:atomic-integer-incf (recycling-taskmaster-accepting-thread-count-cell taskmaster)))
+(defmethod increment-recycling-taskmaster-accepting-thread-count ((taskmaster recycling-taskmaster) &optional (delta 1))
+  (bt2:atomic-integer-incf (recycling-taskmaster-accepting-thread-count-cell taskmaster) delta))
 
 (defmethod decrement-recycling-taskmaster-accepting-thread-count ((taskmaster recycling-taskmaster))
   (bt2:atomic-integer-decf (recycling-taskmaster-accepting-thread-count-cell taskmaster)))
@@ -152,15 +152,11 @@ Thread counter summary:
                                (hunchentoot:acceptor-port acceptor)))
              (name (format nil (hunchentoot::taskmaster-worker-thread-name-format taskmaster)
                            name-sig)))
-        (loop repeat count
-              as thread = (hunchentoot:start-thread taskmaster #'thunk :name name)
-              do (add-recycling-taskmaster-thread taskmaster (list thread))
-		 (increment-recycling-taskmaster-accepting-thread-count taskmaster))
-        #+ ()
+        ;; Increase the counter to suppress duplicated forks.
+        (increment-recycling-taskmaster-accepting-thread-count taskmaster count)
         (loop repeat count
               collect (hunchentoot:start-thread taskmaster #'thunk :name name)
                 into thread-list
-	      and do (increment-recycling-taskmaster-accepting-thread-count taskmaster)
               finally
                  (return
                    (add-recycling-taskmaster-thread taskmaster thread-list)))))))
