@@ -7,6 +7,5 @@
   :serial t
   :components ((:file "package")
                (:file "atomic")
-               (:file "nonatomic-recycling")
                (:file "atomic-recycling"))
   :in-order-to ((test-op (test-op #:hunchentoot-atomic-op-taskmaster-test))))
