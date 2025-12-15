@@ -176,9 +176,9 @@ Thread counter summary:
       ;; In this place we can stop making threads by seeing
       ;; `hunchentoot::acceptor-shutdown-p', but it requires locking.
       ;; I gave up locking for getting a score of micro-benchmarking.
-      (when (< accepting-threads +minimum-accepting-thread-count+)
-        (make-parallel-acceptor-thread taskmaster
-                                       (- +minimum-accepting-thread-count+ accepting-threads)))
+      (let ((threads-to-be-made (- +minimum-accepting-thread-count+ accepting-threads)))
+        (when (plusp threads-to-be-made)
+          (make-parallel-acceptor-thread taskmaster threads-to-be-made)))
       ;; process the connection by itself.
       (hunchentoot::handle-incoming-connection%
        taskmaster
