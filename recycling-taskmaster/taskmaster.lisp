@@ -60,19 +60,15 @@ Thread counter summary:
                (not (<= initial max-accept-count)))
       (hunchentoot:parameter-error "INITIAL-THREAD-COUNT must be equal or less than MAX-ACCEPT-COUNT"))))
 
-(defmethod add-recycling-taskmaster-thread (taskmaster thread-list)
+(defmethod add-recycling-taskmaster-thread (taskmaster thread)
   (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
     (let ((table (hunchentoot::acceptor-process taskmaster)))
-      (loop for thread in thread-list
-            do (setf (gethash thread table) t)))))
+      (setf (gethash thread table) t))))
 
-(defmethod remove-recycling-taskmaster-thread (taskmaster thread-list)
+(defmethod remove-recycling-taskmaster-thread (taskmaster thread)
   (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
-    (let ((table (hunchentoot::acceptor-process taskmaster))
-          (deleted? nil))
-      (loop for thread in thread-list
-            when (remhash thread table)
-              do (setf deleted? t))
+    (let* ((table (hunchentoot::acceptor-process taskmaster))
+           (deleted? (remhash thread table)))
       (when (and deleted?
                  (<= (hash-table-count table) 0))
         (hunchentoot::condition-variable-signal (recycling-taskmaster-shutdown-queue taskmaster)))
@@ -88,7 +84,7 @@ Thread counter summary:
   ()
   (:documentation "Thrown when parallel-acceptor-thread ends."))
 
-(defmethod make-parallel-acceptor-thread ((taskmaster recycling-taskmaster) count)
+(defmethod make-parallel-acceptor-thread ((taskmaster recycling-taskmaster))
   "Makes a new thread for `parallel-acceptor'."
   (let ((acceptor (hunchentoot:taskmaster-acceptor taskmaster)))
     (flet ((thunk ()
@@ -113,17 +109,13 @@ Thread counter summary:
                       ;; otherwise, rethrow it.
                       (error e)))
                ;; For tracking threads at the end, removing from table is deferred to here.
-               (remove-recycling-taskmaster-thread taskmaster (list (bt:current-thread))))))
+               (remove-recycling-taskmaster-thread taskmaster (bt:current-thread)))))
       (let* ((name-sig (format nil "~A:~A" (or (hunchentoot:acceptor-address acceptor) "*")
                                (hunchentoot:acceptor-port acceptor)))
              (name (format nil (hunchentoot::taskmaster-worker-thread-name-format taskmaster)
-                           name-sig)))
-        (loop repeat count
-              collect (hunchentoot:start-thread taskmaster #'thunk :name name)
-                into thread-list
-              finally
-                 (return
-                   (add-recycling-taskmaster-thread taskmaster thread-list)))))))
+                           name-sig))
+             (thread (hunchentoot:start-thread taskmaster #'thunk :name name)))
+        (add-recycling-taskmaster-thread taskmaster thread)))))
 
 (defmethod hunchentoot:execute-acceptor :before ((taskmaster recycling-taskmaster))
   "Checks the type of ACCEPTOR slot, because recycling-taskmaster needs
@@ -133,8 +125,8 @@ Thread counter summary:
 
 (defmethod hunchentoot:execute-acceptor ((taskmaster recycling-taskmaster))
   "Make initial threads working on `parallel-acceptor'."
-  (make-parallel-acceptor-thread taskmaster
-                                 (recycling-taskmaster-initial-thread-count taskmaster)))
+  (loop repeat (recycling-taskmaster-initial-thread-count taskmaster)
+        do (make-parallel-acceptor-thread taskmaster)))
 
 (defmethod count-busy-thread (taskmaster)
   "Estimates how many threads are on client connections."
@@ -163,7 +155,7 @@ Thread counter summary:
       ;; accepting-threads)". but I could not get remarkable
       ;; changes. So I decided to fix it to '1'.
       (when (<= accepting-threads 0)
-        (make-parallel-acceptor-thread taskmaster 1))
+        (make-parallel-acceptor-thread taskmaster))
       ;; process the connection by itself.
       (hunchentoot::handle-incoming-connection%
        taskmaster
