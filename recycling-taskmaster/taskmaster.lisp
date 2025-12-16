@@ -136,7 +136,10 @@ Thread counter summary:
   (make-parallel-acceptor-thread taskmaster
                                  (recycling-taskmaster-initial-thread-count taskmaster)))
 
-(defconstant +minimum-accepting-thread-count+ 2)
+(defconstant +minimum-accepting-thread-count+ 1
+  "How many threads to be ready on the listen socket.
+ (I've tried to adjust this and measure performance, but I could not
+ get remarkable changes. So I decided to fix this to 1.)")
 
 (defmethod estimate-accepting-thread-count (taskmaster)
   "Estimates how many threads waiting on the listen socket."
