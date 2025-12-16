@@ -11,11 +11,6 @@
     :initform (hunchentoot::make-lock "recycling-taskmaster-acceptor-process-lock")
     :reader recycling-taskmaster-acceptor-process-lock
     :documentation "A lock for protecting acceptor-process slot.")
-   (shutdown-queue
-    :initform (hunchentoot::make-condition-variable)
-    :reader recycling-taskmaster-shutdown-queue
-    :documentation
-    "A condition variable to wait for all threads end, locked by acceptor-process-lock.")
    (initial-thread-count
     :type integer
     :initarg :initial-thread-count
@@ -91,12 +86,8 @@ Thread states:
 
 (defmethod remove-recycling-taskmaster-thread (taskmaster thread)
   (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
-    (let* ((table (hunchentoot::acceptor-process taskmaster))
-           (deleted? (remhash thread table)))
-      (when (and deleted?
-                 (<= (hash-table-count table) 0))
-        (hunchentoot::condition-variable-signal (recycling-taskmaster-shutdown-queue taskmaster)))
-      deleted?)))
+    (let ((table (hunchentoot::acceptor-process taskmaster)))
+      (remhash thread table))))
 
 (defmethod count-recycling-taskmaster-thread (taskmaster &key (lock t))
   (if lock
@@ -206,15 +197,6 @@ Thread states:
 
 ;;; Shutdown
 
-(defmethod wait-end-of-handle-incoming-connection% (taskmaster)
-  "Wait until no threads counted by the busy-thread-count slot of TASKMASTER."
-  ;; This code is derived from a part of the original `hunchentoot:stop' function.
-  (let ((acceptor (hunchentoot::taskmaster-acceptor taskmaster)))
-    (hunchentoot::with-lock-held ((hunchentoot::acceptor-shutdown-lock acceptor))
-      (when (plusp (hunchentoot::acceptor-requests-in-progress acceptor))
-        (hunchentoot::condition-variable-wait (hunchentoot::acceptor-shutdown-queue acceptor)
-                                              (hunchentoot::acceptor-shutdown-lock acceptor))))))
-
 (defmethod delete-recycling-taskmaster-finished-thread (taskmaster)
   "Delete dead threads kept in TASKMASTER accidentally."
   (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
@@ -225,9 +207,6 @@ Thread states:
         count it into deleted-cnt
         and do (remhash thread table)
       finally
-         (when (and (plusp deleted-cnt)
-                    (<= (hash-table-count table) 0))
-           (hunchentoot::condition-variable-signal (recycling-taskmaster-shutdown-queue taskmaster)))
          (return (plusp deleted-cnt)))))
 
 (defconstant +wake-acceptor-for-shutdown-timeout+ 1
@@ -261,6 +240,11 @@ Thread states:
   ;; However, usocket does not permit `usocket:socket-shotdown' to a listen socket.
   ;; Even when I `change-class'ed it, Allegro CL does not permit also.
   (loop
+    initially
+       (hunchentoot::with-lock-held ((hunchentoot::acceptor-shutdown-lock acceptor))
+         (assert (hunchentoot::acceptor-shutdown-p acceptor)
+                 () "acceptor-shutdown-p should be true"))
+    
     with acceptor = (hunchentoot:taskmaster-acceptor taskmaster)
     with listen-socket = (hunchentoot::acceptor-listen-socket acceptor)
 
@@ -289,15 +273,10 @@ Thread states:
           (error (e)
             (hunchentoot::acceptor-log-message acceptor :error "Wake-for-shutdown connect failed: ~A" e))))
     finally
-       (return maybe-accepting-threads)))
-
-(defmethod wait-for-recycling-taskmaster-shutdown (taskmaster)
-  "Wait until a recycling-taskmaster specified by TASKMASTER ends."
-  (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
-    (loop while (plusp (count-recycling-taskmaster-thread taskmaster :lock nil))
-          do (hunchentoot::condition-variable-wait
-              (recycling-taskmaster-shutdown-queue taskmaster)
-              (recycling-taskmaster-acceptor-process-lock taskmaster)))))
+       ;; When (zerop maybe-accepting-threads) here, rest threads are
+       ;; in `hunchentoot::handle-incoming-connection%', so they can
+       ;; be wait using `hunchentoot::acceptor-shutdown-queue'.
+       (return (zerop maybe-accepting-threads))))
 
 
 (defmethod abandon-taskmaster ((taskmaster recycling-taskmaster) &key (lock t))
@@ -305,9 +284,7 @@ Thread states:
  for handling corrupted taskmaster objects."
   (flet ((steal-threads ()
            (prog1 (hash-table-keys (hunchentoot::acceptor-process taskmaster))
-             (clrhash (hunchentoot::acceptor-process taskmaster))
-             (hunchentoot::condition-variable-signal
-              (recycling-taskmaster-shutdown-queue taskmaster)))))
+             (clrhash (hunchentoot::acceptor-process taskmaster)))))
     (loop
       with thread-list
         = (if lock

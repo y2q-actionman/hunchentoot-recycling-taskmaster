@@ -19,18 +19,27 @@
   (let ((taskmaster (hunchentoot::acceptor-taskmaster acceptor)))
     (check-type taskmaster hunchentoot-recycling-taskmaster:recycling-taskmaster)))
 
+(defmethod wait-for-acceptor-shutdown-queue (acceptor)
+  "Wait for a notification of `hunchentoot::acceptor-shutdown-queue'"
+  ;; This code is derived from a part of the original `hunchentoot:stop' function.
+  (hunchentoot::with-lock-held ((hunchentoot::acceptor-shutdown-lock acceptor))
+    (when (plusp (hunchentoot::acceptor-requests-in-progress acceptor))
+      (hunchentoot::condition-variable-wait (hunchentoot::acceptor-shutdown-queue acceptor)
+                                            (hunchentoot::acceptor-shutdown-lock acceptor)))))
+
 (defmethod hunchentoot:stop ((acceptor parallel-acceptor) &key soft)
   "This works like the parental method, except some works for sharing
 the listen socket."
   (hunchentoot::with-lock-held ((hunchentoot::acceptor-shutdown-lock acceptor))
     (setf (hunchentoot::acceptor-shutdown-p acceptor) t))
-  (let ((taskmaster (hunchentoot::acceptor-taskmaster acceptor)))
-    (hunchentoot:shutdown taskmaster)
-    (when soft
-      ;; Wait for all thread end. This includes waiting for
-      ;; `hunchentoot::acceptor-shutdown-queue' done by
-      ;; original `hunchentoot:stop'.
-      (wait-for-recycling-taskmaster-shutdown taskmaster)))
+  ;; We must wake as many threads as the listening threads, and it can
+  ;; be done by our `hunchentoot:shutdown'.  So I call
+  ;; `hunchentoot:shutdown' immediately, unlike of the original
+  ;; `hunchentoot:stop'.
+  (let* ((taskmaster (hunchentoot::acceptor-taskmaster acceptor))
+         (can-wait-p (hunchentoot:shutdown taskmaster)))
+    (when (and soft can-wait-p)
+      (wait-for-acceptor-shutdown-queue acceptor)))
   (usocket:socket-close (hunchentoot::acceptor-listen-socket acceptor))
   (setf (hunchentoot::acceptor-listen-socket acceptor) nil)
   acceptor)
