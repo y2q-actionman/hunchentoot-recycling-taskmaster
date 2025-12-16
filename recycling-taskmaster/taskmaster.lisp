@@ -155,22 +155,22 @@ Thread counter summary:
       ;; accepting-threads)". but I could not get remarkable
       ;; changes. So I decided to fix it to '1'.
       (when (<= accepting-threads 0)
-        (make-parallel-acceptor-thread taskmaster))
-      ;; process the connection by itself.
-      (hunchentoot::handle-incoming-connection%
-       taskmaster
-       ;; Pass CLIENT-CONNECTION to the Hunchentoot handler and prevent close() here.
-       (shiftf client-connection nil))
-      ;; See waiters to determine whether this thread is recyclied or not.
-      (setf all-threads (count-recycling-taskmaster-thread taskmaster)
-            busy-threads (count-busy-thread taskmaster) ; reads again.
-            accepting-threads (- all-threads busy-threads))
+        (make-parallel-acceptor-thread taskmaster)))
+    ;; process the connection by itself.
+    (hunchentoot::handle-incoming-connection%
+     taskmaster
+     ;; Pass CLIENT-CONNECTION to the Hunchentoot handler and prevent close() here.
+     (shiftf client-connection nil))
+    ;; See waiters to determine whether this thread is recyclied or not.
+    (let ((all-threads (count-recycling-taskmaster-thread taskmaster)) ; reads again.
+          (initial-threads (recycling-taskmaster-initial-thread-count taskmaster)))
       (when (and
-             ;; Someone is waiting -- means no pending connections.
-             (plusp accepting-threads)
-             ;; and there are enough other threads.
-             (< (recycling-taskmaster-initial-thread-count taskmaster)
-                all-threads))
+             ;; There are enough other threads.
+             (< initial-threads all-threads)
+             ;; and someone is waiting -- means no pending connections.
+             (let* ((busy-threads (count-busy-thread taskmaster))
+                    (accepting-threads (- all-threads busy-threads)))
+               (plusp accepting-threads)))
         (error 'end-of-parallel-acceptor-thread)))))
 
 (defmethod hunchentoot:create-request-handler-thread ((taskmaster recycling-taskmaster) client-connection)
