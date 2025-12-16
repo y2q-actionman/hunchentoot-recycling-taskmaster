@@ -36,12 +36,36 @@ Thread counter summary:
   `count-recycling-taskmaster-thread'.
   Its lower bound is in `INITIAL-THREAD-COUNT' slot.
 
-- `hunchentoot::acceptor-requests-in-progress' is a counter in
-  Hunchentoot, counts threads working on a connected socket.
-  It is used by `estimate-accepting-thread-count'.
+- `hunchentoot::acceptor-requests-in-progress' is a counter in the
+  original Hunchentoot and counts threads working on a connected
+  socket.
 
   They are in `hunchentoot:accept-connections' and in
   `hunchentoot::handle-incoming-connection%'.
+
+Thread states:
+
+1. In `hunchentoot::handle-incoming-connection%'.
+   They are counted by `hunchentoot::acceptor-requests-in-progress'.
+   `hunchentoot::acceptor-shutdown-queue' can be used to wait for
+   they go away.
+
+2. Waiting on the listen socket.
+   They can be wake by `wake-acceptor-for-shutdown-using-listen-socket'.
+   I estimate the number of them by
+     (- `count-recycling-taskmaster-thread'
+        `hunchentoot::acceptor-requests-in-progress'),
+   but it might contain threads at the third or fourth state (below).
+
+3. At other places in the loop of `hunchentoot:accept-connections'.
+   It rarely exists. However, when a last thread was this state just
+   before `wake-acceptor-for-shutdown-using-listen-socket', the thread
+   would exit soon and
+   `wake-acceptor-for-shutdown-using-listen-socket' blocks
+   permanently. My `hunchentoot:shutdown' considers this situation.
+
+4. Interrupted and broken, but held by `hunchentoot::acceptor-process'.
+   `delete-recycling-taskmaster-finished-thread' deletes them.
 "))
 
 
@@ -206,9 +230,15 @@ Thread counter summary:
            (hunchentoot::condition-variable-signal (recycling-taskmaster-shutdown-queue taskmaster)))
          (return (plusp deleted-cnt)))))
 
-(defun wake-acceptor-for-shutdown-using-listen-socket (listen-socket)
-  "Works like `hunchentoot::wake-acceptor-for-shutdown', except 
- takes the listen socket as an argument and utilize `usocket:socket-shutdown'."
+(defconstant +wake-acceptor-for-shutdown-timeout+ 1
+  "The timeout used by
+ `wake-acceptor-for-shutdown-using-listen-socket' to avoid an
+ accidental permanent block in our `hunchentoot:shutdown'.")
+
+(defun wake-acceptor-for-shutdown-using-listen-socket (listen-socket &key (timeout +wake-acceptor-for-shutdown-timeout+))
+  "Works like `hunchentoot::wake-acceptor-for-shutdown', except takes
+ the listen socket as an argument, apply a timeout, and utilize
+ `usocket:socket-shutdown'."
   (multiple-value-bind (address port) (usocket:get-local-name listen-socket)
     (let ((conn (usocket:socket-connect
                  (cond
@@ -218,21 +248,14 @@ Thread counter summary:
                          (every #'zerop address))
                     #(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1))
                    (t address))
-                 port)))
+                 port
+                 :timeout timeout :nodelay t)))
       ;; Use `socket-shutdown' not to block on reading this socket from the server side.
       (usocket:socket-shutdown conn :io)
       (usocket:socket-close conn))))
 
 (defmethod hunchentoot:shutdown ((taskmaster recycling-taskmaster))
   "Tell every threads to shutdown."
-  ;; 1. Sets a flag saying "end itself" to the threads.
-  ;;    -> done by `hunchentoot:stop' setting `hunchentoot::acceptor-shutdown-p'
-  ;;
-  ;; 2. Waits threads in `hunchentoot:handle-incoming-connection'.
-  ;; (wait-end-of-handle-incoming-connection% taskmaster)
-  ;; 3. Wakes every threads waiting the listen socket, using
-  ;; `wake-acceptor-for-shutdown-using-listen-socket'
-  ;; 
   ;; NOTE: I saw shutdown(2) can be usable for this purpose:
   ;;    https://stackoverflow.com/questions/9365282/c-linux-accept-blocking-after-socket-closed
   ;; However, usocket does not permit `usocket:socket-shotdown' to a listen socket.
@@ -240,14 +263,33 @@ Thread counter summary:
   (loop
     with acceptor = (hunchentoot:taskmaster-acceptor taskmaster)
     with listen-socket = (hunchentoot::acceptor-listen-socket acceptor)
-      initially (unless listen-socket
-                  (return-from hunchentoot:shutdown nil))
-    while (plusp (count-recycling-taskmaster-thread taskmaster))
-    do (or (delete-recycling-taskmaster-finished-thread taskmaster)
-           (handler-case
-               (wake-acceptor-for-shutdown-using-listen-socket listen-socket)
-             (error (e)
-               (hunchentoot::acceptor-log-message acceptor :error "Wake-for-shutdown connect failed: ~A" e))))))
+
+    ;; See the docstring of `recycling-taskmaster' for thread states and counters.
+    for all-threads = (count-recycling-taskmaster-thread taskmaster)
+    for busy-threads = (count-busy-thread taskmaster)
+    as maybe-accepting-threads = (- all-threads busy-threads)
+    
+    while (plusp maybe-accepting-threads)
+    do (or
+        ;; Delete broken threads
+        (delete-recycling-taskmaster-finished-thread taskmaster)
+        ;; When the listen socket closed accidentally, gives up waking
+        ;; threads.
+        (unless (and listen-socket
+                     (usocket:socket-state listen-socket))
+          (hunchentoot::acceptor-log-message acceptor :warn "Wake-for-shutdown connect was gave up for closed socket: ~A"
+                                             listen-socket)
+          (loop-finish))
+        ;; Try to wake a thread waiting on the listen socket.
+        ;; To avoid a permanent block, I use timeouts.
+        (handler-case
+            (wake-acceptor-for-shutdown-using-listen-socket listen-socket)
+          (usocket:timeout-error (e)
+            (hunchentoot::acceptor-log-message acceptor :info "Wake-for-shutdown connect failed by timeout: ~A" e))
+          (error (e)
+            (hunchentoot::acceptor-log-message acceptor :error "Wake-for-shutdown connect failed: ~A" e))))
+    finally
+       (return maybe-accepting-threads)))
 
 (defmethod wait-for-recycling-taskmaster-shutdown (taskmaster)
   "Wait until a recycling-taskmaster specified by TASKMASTER ends."
