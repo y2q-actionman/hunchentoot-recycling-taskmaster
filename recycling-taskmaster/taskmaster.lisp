@@ -273,19 +273,28 @@ Thread states:
     do (or
         ;; Delete broken threads
         (delete-recycling-taskmaster-finished-thread taskmaster)
-        ;; When the listen socket closed accidentally, gives up waking
-        ;; threads.
-        (unless (and listen-socket
-                     (usocket:socket-state listen-socket))
-          (hunchentoot::acceptor-log-message acceptor :warn "Wake-for-shutdown connect was gave up for closed socket: ~A"
-                                             listen-socket)
+        ;; The listen socket was closed already.
+        (unless listen-socket
+          (hunchentoot::acceptor-log-message
+           acceptor :info "Wake-for-shutdown connect is gave-up because the listen socket has been set to NIL.")
           (warn 'recycling-taskmaster-shutdown-aborted-warning
-                :taskmaster taskmaster :reason "the listen socket has been closed already.")
+                :taskmaster taskmaster :reason "the listen socket has been set to NIL.")
           (loop-finish))
         ;; Try to wake a thread waiting on the listen socket.
         ;; To avoid a permanent block, I use timeouts.
         (handler-case
             (wake-acceptor-for-shutdown-using-listen-socket listen-socket)
+          (usocket:connection-refused-error (e)
+            ;; The listen socket was closed by another thread.
+            ;; NOTE: It seems there are no way to check whether a
+            ;;  listen socket was closed or not.
+            ;;  (`usocket:socket-state' is always NIL for a listen
+            ;;  socket.) So I think checking 'Connection Refused' is a
+            ;;  only way to do it.
+            (hunchentoot::acceptor-log-message acceptor :info "Wake-for-shutdown connect failed by connection-refused: ~A" e)
+            (warn 'recycling-taskmaster-shutdown-aborted-warning
+                  :taskmaster taskmaster :reason "Connection-refused" )
+            (loop-finish))
           (usocket:timeout-error (e)
             (hunchentoot::acceptor-log-message acceptor :info "Wake-for-shutdown connect failed by timeout: ~A" e)
             (when (> (incf wake-try-count) +wake-acceptor-for-shutdown-max-retry-count+)
