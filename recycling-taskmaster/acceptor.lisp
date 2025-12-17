@@ -70,33 +70,6 @@ the listen socket."
            (hunchentoot::acceptor-taskmaster acceptor)
            client-connection))))))
 
-;;; escape hatch
-(defmethod abandon-acceptor ((acceptor parallel-acceptor) &key (lock t))
-  "To force an end of ACCEPTOR, destroy all threads and the listen
-socket. If LOCK is nil, this is done *without* locking.  This function
-should not be called in production (but required for my debugging)."
-  (with-accessors ((shutdown-lock hunchentoot::acceptor-shutdown-lock)
-                   (shutdown-p hunchentoot::acceptor-shutdown-p)
-                   (listen-socket hunchentoot::acceptor-listen-socket))
-      acceptor
-    (if lock
-        (hunchentoot::with-lock-held (shutdown-lock)
-          (setf shutdown-p t))
-        (setf shutdown-p t))
-    (when listen-socket
-      (ignore-errors
-       (usocket:socket-close listen-socket))
-      (setf listen-socket nil)))
-  (abandon-taskmaster (hunchentoot::acceptor-taskmaster acceptor) :lock lock)
-  ;; Checks corruption
-  ;; TODO: Provide a restart.
-  ;; FIXME: Threads waiting on locks or 'shutdown-queue' may be left.
-  (unless (zerop (hunchentoot::acceptor-requests-in-progress acceptor))
-    (cerror "Ignore it."
-            'recycling-taskmaster-corrupted-error
-            :object acceptor :broken-slots '(hunchentoot::requests-in-progress)))
-  acceptor)
-
 ;;; Derived classes
 (defclass parallel-ssl-acceptor (parallel-acceptor hunchentoot:ssl-acceptor)
   ())

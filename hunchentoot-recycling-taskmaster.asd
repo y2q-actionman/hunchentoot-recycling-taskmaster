@@ -7,5 +7,6 @@
   :serial t
   :components ((:file "package")
                (:file "taskmaster")
-               (:file "acceptor"))
+               (:file "acceptor")
+               (:file "abandon-server"))
   :in-order-to ((test-op (test-op #:hunchentoot-recycling-taskmaster-test))))
