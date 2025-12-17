@@ -279,22 +279,53 @@ Thread states:
        (return (zerop maybe-accepting-threads))))
 
 
+;;; escape hatch
+
+(define-condition recycling-taskmaster-corrupted-error (cl:simple-error)
+  ((object :initarg :object)
+   (broken-slots :initarg :broken-slots :initform nil))
+  (:report (lambda (condition stream)
+             (with-slots (object broken-slots) condition
+               (format stream "Object ~A slots ~A is corrupted, probably by interrupts."
+                       object broken-slots))))
+  (:documentation "Signalled when the object was broken by interrupts
+  of `abandon-taskmaster'"))
+
 (defmethod abandon-taskmaster ((taskmaster recycling-taskmaster) &key (lock t))
   "Abandon all threads kept in TASKMASTER. This is a last resort
  for handling corrupted taskmaster objects."
-  (flet ((steal-threads ()
-           (prog1 (hash-table-keys (hunchentoot::acceptor-process taskmaster))
-             (clrhash (hunchentoot::acceptor-process taskmaster)))))
-    (loop
-      with thread-list
-        = (if lock
-              (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
-                (steal-threads))
-              (steal-threads))
-      for thread in thread-list
-      collect
+  (let ((thread-list
+          (flet ((steal-threads ()
+                   (prog1 (hash-table-keys (hunchentoot::acceptor-process taskmaster))
+                     (clrhash (hunchentoot::acceptor-process taskmaster)))))
+            (if lock
+                (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
+                  (steal-threads))
+                (steal-threads)))))
+    (dolist (thread thread-list)
       (typecase thread
         (bt2:thread
          (bt2:error-in-thread thread 'end-of-parallel-acceptor-thread))
         (otherwise                      ; bt1 thread object.
-         (bt:interrupt-thread thread (lambda () (error 'end-of-parallel-acceptor-thread))))))))
+         (bt:interrupt-thread thread (lambda () (error 'end-of-parallel-acceptor-thread))))))
+    (dolist (thread thread-list)
+      (typecase thread
+        (bt2:thread
+         (bt2:join-thread thread))
+        (otherwise
+         (bt:join-thread thread))))
+    ;; Checks corruption
+    ;; TODO: Provide a restart.
+    ;; FIXME: Threads waiting on locks or 'wait-queue' may be left.
+    (let ((broken-slots nil))
+      (unless (zerop (hash-table-count (hunchentoot::acceptor-process taskmaster)))
+        (push 'hunchentoot::acceptor-process broken-slots))
+      (unless (zerop (hunchentoot::taskmaster-thread-count taskmaster))
+        (push 'hunchentoot::thread-count broken-slots))
+      (unless (zerop (hunchentoot::taskmaster-accept-count taskmaster))
+        (push 'hunchentoot::accept-count broken-slots))
+      (when broken-slots
+        (cerror "Ignore it."
+                'recycling-taskmaster-corrupted-error
+                :object taskmaster :broken-slots broken-slots)))
+    taskmaster))

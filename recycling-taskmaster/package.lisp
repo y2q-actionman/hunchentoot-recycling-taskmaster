@@ -8,7 +8,9 @@
    #:parallel-easy-acceptor
    #:parallel-ssl-acceptor
    #:parallel-easy-ssl-acceptor
-   #:kill
+   ;; Only for handling a broken server.
+   #:abandon-acceptor
+   #:recycling-taskmaster-corrupted-error
    ;; exported for hunchentoot-atomic-op-taskmaster
    #:recycling-taskmaster-busy-thread-count
    #:recycling-taskmaster-busy-thread-count-cell
