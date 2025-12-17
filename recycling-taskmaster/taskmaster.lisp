@@ -219,19 +219,16 @@ Thread states:
  the listen socket as an argument, apply a timeout, and utilize
  `usocket:socket-shutdown'."
   (multiple-value-bind (address port) (usocket:get-local-name listen-socket)
-    (let ((conn (usocket:socket-connect
-                 (cond
-                   ((and (= (length address) 4) (zerop (elt address 0)))
-                    #(127 0 0 1))
-                   ((and (= (length address) 16)
-                         (every #'zerop address))
-                    #(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1))
-                   (t address))
-                 port
-                 :timeout timeout :nodelay t)))
-      ;; Use `socket-shutdown' not to block on reading this socket from the server side.
-      (usocket:socket-shutdown conn :io)
-      (usocket:socket-close conn))))
+    (let ((conn-addr (cond
+                       ((and (= (length address) 4) (zerop (elt address 0)))
+                        #(127 0 0 1))
+                       ((and (= (length address) 16)
+                             (every #'zerop address))
+                        #(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1))
+                       (t address))))
+      (usocket:with-client-socket (conn nil conn-addr port :timeout timeout :nodelay t)
+        ;; Use `socket-shutdown' not to block on reading this socket from the server side.
+        (usocket:socket-shutdown conn :io)))))
 
 (defconstant +wake-acceptor-for-shutdown-max-retry-count+ 3
   "How many times `hunchentoot:shutdown' retries
