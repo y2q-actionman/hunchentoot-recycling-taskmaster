@@ -1,7 +1,5 @@
 (in-package :cl-user)
 
 (defpackage #:hunchentoot-recycling-taskmaster-test
-  (:use #:cl)
-  (:export
-   ;; TODO
-   ))
+  (:use #:cl #:hunchentoot-recycling-taskmaster #:hunchentoot-test)
+  (:export))
