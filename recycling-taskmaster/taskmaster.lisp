@@ -192,7 +192,7 @@ Thread states:
   "This method is never called for `recycling-taskmaster'. See
 `make-parallel-acceptor-thread' instead."
   (declare (ignore client-connection))
-  (error "This method is not implemented for recycling-taskmaster."))
+  (hunchentoot::not-implemented 'hunchentoot:create-request-handler-thread))
 
 
 ;;; Shutdown
