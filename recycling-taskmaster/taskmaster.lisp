@@ -249,8 +249,8 @@ Thread states:
   "Tell every threads to shutdown."
   ;; NOTE: I saw shutdown(2) can be usable for this purpose:
   ;;    https://stackoverflow.com/questions/9365282/c-linux-accept-blocking-after-socket-closed
-  ;; However, usocket does not permit `usocket:socket-shotdown' to a listen socket.
-  ;; Even when I `change-class'ed it, Allegro CL does not permit also.
+  ;; However, usocket does not permit `usocket:socket-shutdown' to a listen socket.
+  ;; I tried `change-class' but Allegro CL does not permit it.
   (loop
     initially
        (hunchentoot::with-lock-held ((hunchentoot::acceptor-shutdown-lock acceptor))
