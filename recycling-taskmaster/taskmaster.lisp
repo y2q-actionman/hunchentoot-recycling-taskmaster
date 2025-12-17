@@ -233,6 +233,21 @@ Thread states:
       (usocket:socket-shutdown conn :io)
       (usocket:socket-close conn))))
 
+(defconstant +wake-acceptor-for-shutdown-max-retry-count+ 3
+  "How many times `hunchentoot:shutdown' retries
+  `wake-acceptor-for-shutdown-using-listen-socket'.")
+
+(define-condition recycling-taskmaster-shutdown-aborted-warning (hunchentoot:hunchentoot-warning)
+  ((taskmaster :initarg :taskmaster :initform nil)
+   (reason :initarg :reason :initform ""))
+  (:report
+   (lambda (condition stream)
+     (with-slots (taskmaster reason) condition
+       (format stream "Shutting-down taskmaster ~A was aborted by ~A."
+               taskmaster reason))))
+  (:documentation "Signalled when `hunchentoot:shutdown' for
+  `recycling-taskmaster' gave up."))
+
 (defmethod hunchentoot:shutdown ((taskmaster recycling-taskmaster))
   "Tell every threads to shutdown."
   ;; NOTE: I saw shutdown(2) can be usable for this purpose:
@@ -247,6 +262,7 @@ Thread states:
     
     with acceptor = (hunchentoot:taskmaster-acceptor taskmaster)
     with listen-socket = (hunchentoot::acceptor-listen-socket acceptor)
+    with wake-try-count = 0
 
     ;; See the docstring of `recycling-taskmaster' for thread states and counters.
     for all-threads = (count-recycling-taskmaster-thread taskmaster)
@@ -263,15 +279,26 @@ Thread states:
                      (usocket:socket-state listen-socket))
           (hunchentoot::acceptor-log-message acceptor :warn "Wake-for-shutdown connect was gave up for closed socket: ~A"
                                              listen-socket)
+          (warn 'recycling-taskmaster-shutdown-aborted-warning
+                :taskmaster taskmaster :reason "the listen socket has been closed already.")
           (loop-finish))
         ;; Try to wake a thread waiting on the listen socket.
         ;; To avoid a permanent block, I use timeouts.
         (handler-case
             (wake-acceptor-for-shutdown-using-listen-socket listen-socket)
           (usocket:timeout-error (e)
-            (hunchentoot::acceptor-log-message acceptor :info "Wake-for-shutdown connect failed by timeout: ~A" e))
+            (hunchentoot::acceptor-log-message acceptor :info "Wake-for-shutdown connect failed by timeout: ~A" e)
+            (when (> (incf wake-try-count) +wake-acceptor-for-shutdown-max-retry-count+)
+              (warn 'recycling-taskmaster-shutdown-aborted-warning
+                    :taskmaster taskmaster
+                    :reason (format nil "Timeout occured more than ~R times." +wake-acceptor-for-shutdown-max-retry-count+) )
+              (loop-finish)))
           (error (e)
-            (hunchentoot::acceptor-log-message acceptor :error "Wake-for-shutdown connect failed: ~A" e))))
+            (hunchentoot::acceptor-log-message acceptor :error "Wake-for-shutdown connect failed: ~A" e)
+            (warn 'recycling-taskmaster-shutdown-aborted-warning
+                    :taskmaster taskmaster
+                    :reason (format nil "Failed to connect itself: ~A" e) )
+            (loop-finish))))
     finally
        ;; When (zerop maybe-accepting-threads) here, rest threads are
        ;; in `hunchentoot::handle-incoming-connection%', so they can
