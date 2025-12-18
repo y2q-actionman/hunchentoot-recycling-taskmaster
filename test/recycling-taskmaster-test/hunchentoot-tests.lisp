@@ -20,7 +20,7 @@
            (hunchentoot-test:test-hunchentoot (format nil "http://localhost:~A" *test-port*)))
       (format t "~&;; Stopping server.")
       (force-output)
-      (hunchentoot:stop server :soft t)
+      (hunchentoot:stop server)
       (format t "~&;; Cleaning temporary files.")
       (hunchentoot-test::clean-tmp-dir))))
 
