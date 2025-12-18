@@ -215,10 +215,18 @@ Thread states:
  `wake-acceptor-for-shutdown-using-listen-socket' to avoid an
  accidental permanent block in our `hunchentoot:shutdown'.")
 
-(defun wake-acceptor-for-shutdown-using-listen-socket (listen-socket &key (timeout +wake-acceptor-for-shutdown-timeout+))
+(defun wake-acceptor-for-shutdown-using-listen-socket
+    (listen-socket &key (timeout +wake-acceptor-for-shutdown-timeout+) (compat nil))
   "Works like `hunchentoot::wake-acceptor-for-shutdown', except takes
  the listen socket as an argument, apply a timeout, and utilize
  `usocket:socket-shutdown'."
+  (when (and timeout compat)            ; This is for Allegro CL
+    (return-from wake-acceptor-for-shutdown-using-listen-socket
+      (handler-case
+          (bt:with-timeout (timeout)
+            (wake-acceptor-for-shutdown-using-listen-socket listen-socket :timeout nil :compat nil))
+        (bt:timeout ()
+          (error 'usocket:timeout-error)))))
   (multiple-value-bind (address port) (usocket:get-local-name listen-socket)
     (let ((conn-addr (cond
                        ((and (= (length address) 4) (zerop (elt address 0)))
@@ -261,6 +269,7 @@ Thread states:
     with acceptor = (hunchentoot:taskmaster-acceptor taskmaster)
     with listen-socket = (hunchentoot::acceptor-listen-socket acceptor)
     with wake-try-count = 0
+    with timeout-compat = nil
 
     ;; See the docstring of `recycling-taskmaster' for thread states and counters.
     for all-threads = (count-recycling-taskmaster-thread taskmaster)
@@ -281,7 +290,7 @@ Thread states:
         ;; Try to wake a thread waiting on the listen socket.
         ;; To avoid a permanent block, I use timeouts.
         (handler-case
-            (wake-acceptor-for-shutdown-using-listen-socket listen-socket)
+            (wake-acceptor-for-shutdown-using-listen-socket listen-socket :compat timeout-compat)
           (usocket:connection-refused-error (e)
             ;; The listen socket was closed by another thread.
             ;; NOTE: It seems there are no way to check whether a
@@ -300,11 +309,24 @@ Thread states:
                     :taskmaster taskmaster
                     :reason (format nil "Timeout occured more than ~R times." +wake-acceptor-for-shutdown-max-retry-count+) )
               (loop-finish)))
+          (usocket:unsupported (e)
+            (cond ((and (eq (usocket::feature e) 'usocket::timeout)  ; Allego CL comes here
+                        (eq (usocket::context e) 'usocket:socket-connect))
+                   (incf wake-try-count) ; poka-yoke for an accidental infinite loop.
+                   (hunchentoot::acceptor-log-message
+                    acceptor :info "Wake-for-shutdown connect failed because (~A). Uses timeout-compat." e)
+                   (setf timeout-compat t))
+                  (t
+                   (hunchentoot::acceptor-log-message acceptor :error "Wake-for-shutdown connect failed by usocket:unsupported; ~A" e)
+                   (warn 'recycling-taskmaster-shutdown-aborted-warning
+                         :taskmaster taskmaster
+                         :reason (format nil "Failed to connect itself by usocket:unsupported; ~A" e))
+                   (loop-finish))))
           (error (e)
             (hunchentoot::acceptor-log-message acceptor :error "Wake-for-shutdown connect failed: ~A" e)
             (warn 'recycling-taskmaster-shutdown-aborted-warning
-                    :taskmaster taskmaster
-                    :reason (format nil "Failed to connect itself: ~A" e) )
+                  :taskmaster taskmaster
+                  :reason (format nil "Failed to connect itself: ~A" e) )
             (loop-finish))))
     finally
        ;; When (zerop maybe-accepting-threads) here, rest threads are
