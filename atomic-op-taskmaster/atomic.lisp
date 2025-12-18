@@ -57,6 +57,9 @@ atomic integers."))
   (:documentation "An acceptor works just like
 `hunchentoot:acceptor' except using atomic integers."))
 
+(defvar *original-do-with-acceptor-request-count-incremented*
+  (fdefinition 'hunchentoot::do-with-acceptor-request-count-incremented))
+
 (in-package #:hunchentoot)
 
 (defmethod acceptor-requests-in-progress ((acceptor hunchentoot-atomic-op-taskmaster:atomic-acceptor))
@@ -65,19 +68,11 @@ atomic integers."))
 (defmethod (setf acceptor-requests-in-progress) (value (acceptor hunchentoot-atomic-op-taskmaster:atomic-acceptor))
   (setf (bt2:atomic-integer-value (slot-value acceptor 'requests-in-progress)) value))
 
-(defgeneric hunchentoot::do-with-acceptor-request-count-incremented (acceptor function)
-  (:documentation "This definition overwrites the original one with a
-  generic function to hook accessing atomic integers.")
+(defgeneric do-with-acceptor-request-count-incremented-gf (acceptor function)
   (:method (*acceptor* function)
     "Default method is same as the original one"
-    (with-lock-held ((acceptor-shutdown-lock *acceptor*))
-      (incf (acceptor-requests-in-progress *acceptor*)))
-    (unwind-protect
-         (funcall function)
-      (with-lock-held ((acceptor-shutdown-lock *acceptor*))
-        (decf (acceptor-requests-in-progress *acceptor*))
-        (when (acceptor-shutdown-p *acceptor*)
-          (condition-variable-signal (acceptor-shutdown-queue *acceptor*))))))
+    (funcall hunchentoot-atomic-op-taskmaster:*original-do-with-acceptor-request-count-incremented*
+             *acceptor* function))
   (:method ((*acceptor* hunchentoot-atomic-op-taskmaster:atomic-acceptor) function)
     "Do same as the original one except utilizing atomic integers."
     (with-slots (requests-in-progress) *acceptor*
@@ -88,6 +83,10 @@ atomic integers."))
         (with-lock-held ((acceptor-shutdown-lock *acceptor*))
           (when (acceptor-shutdown-p *acceptor*)
             (condition-variable-signal (acceptor-shutdown-queue *acceptor*))))))))
+
+(defun do-with-acceptor-request-count-incremented (*acceptor* function)
+  "Replace original one to a trampoline to our generic function"
+  (do-with-acceptor-request-count-incremented-gf *acceptor* function))
 
 
 (in-package #:hunchentoot-atomic-op-taskmaster)

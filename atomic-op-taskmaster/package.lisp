@@ -15,4 +15,6 @@
    #:atomic-parallel-easy-acceptor
    #:atomic-parallel-easy-ssl-acceptor
    #:atomic-recycling-taskmaster
-   #:atomic-parallel-acceptor))
+   #:atomic-parallel-acceptor
+   ;; for internal use.
+   #:*original-do-with-acceptor-request-count-incremented*))
