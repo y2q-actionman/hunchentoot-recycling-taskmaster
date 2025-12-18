@@ -110,27 +110,78 @@
 (defparameter *test-server-url*
   (format nil "http://127.0.0.1:~D/" *debug-server-port*))
 
-(defun test-request (&key keep-alive)
-  (handler-case
-      (drakma:http-request *test-server-url* :keep-alive keep-alive)
-    (usocket:connection-reset-error ()
-      (progn))))
-
 ;;; Test scenarios
 
 (1am:test shutdown-with-no-accept
   (with-making-test-server (server)
-    (progn)))
+    (1am:is (hunchentoot:stop (shiftf server nil) :soft t))))
 
 (1am:test shutdown-after-one-accept
   (with-making-test-server (server)
-    (test-request)))
+    (1am:is (drakma:http-request *test-server-url*))
+    (1am:is (hunchentoot:stop (shiftf server nil) :soft t))))
+
+;;; Simutates worker threads are working for a client connection somewhere.
+
+(1am:test shutdown-at-before-handle-incoming-connection
+  (with-making-test-server (server)
+    (setf (before-handle-incoming-connection-stop-p) t)
+    (let ((client-thread
+            (make-thread (lambda ()
+                           (1am:signals error
+                             (drakma:http-request *test-server-url*))
+                           t))))
+      (sleep-for-a-worker-in-before-handle-incoming-connection)
+      (schedule-waking-up-a-worker-in-before-handle-incoming-connection)
+      (1am:is (hunchentoot:stop (shiftf server nil) :soft t))
+      (1am:is (join-thread client-thread)))))
+
+(1am:test shutdown-at-before-process-connection
+  (with-making-test-server (server)
+    (setf (before-process-connection-stop-p) t)
+    (let ((client-thread
+            (make-thread (lambda ()
+                           (1am:signals error
+                             (drakma:http-request *test-server-url*))
+                           t))))
+      (sleep-for-a-worker-in-before-process-connection)
+      (schedule-waking-up-a-worker-in-before-process-connection)
+      (1am:is (hunchentoot:stop (shiftf server nil) :soft t))
+      (1am:is (join-thread client-thread)))))
 
 (1am:test shutdown-in-hello-world-handler
   (with-making-test-server (server)
     (setf (hello-world-handler-stop-p) t)
-    (make-thread 'test-request)
-    (sleep-for-a-worker-in-hello-world-handler)
-    ;; Schedule waking up a worker thread bitly after `hunchentoot:stop'.
-    (schedule-waking-up-a-worker-in-hello-world-handler)
-    (hunchentoot:stop (shiftf server nil))))
+    (let ((client-thread
+            (make-thread (lambda ()
+                           (1am:is (drakma:http-request *test-server-url*))
+                           t))))
+      (sleep-for-a-worker-in-hello-world-handler)
+      ;; Schedule waking up a worker thread bitly after `hunchentoot:stop'.
+      (schedule-waking-up-a-worker-in-hello-world-handler)
+      (1am:is (hunchentoot:stop (shiftf server nil) :soft t))
+      (1am:is (join-thread client-thread)))))
+
+(1am:test shutdown-at-after-process-connection
+  (with-making-test-server (server)
+    (setf (after-process-connection-stop-p) t)
+    (let ((client-thread
+            (make-thread (lambda ()
+                           (1am:is (drakma:http-request *test-server-url*))
+                           t))))
+      (sleep-for-a-worker-in-after-process-connection)
+      (schedule-waking-up-a-worker-in-after-process-connection)
+      (1am:is (hunchentoot:stop (shiftf server nil) :soft t))
+      (1am:is (join-thread client-thread)))))
+
+(1am:test shutdown-at-after-handle-incoming-connection
+  (with-making-test-server (server)
+    (setf (after-handle-incoming-connection-stop-p) t)
+    (let ((client-thread
+            (make-thread (lambda ()
+                           (1am:is (drakma:http-request *test-server-url*))
+                           t))))
+      (sleep-for-a-worker-in-after-handle-incoming-connection)
+      (schedule-waking-up-a-worker-in-after-handle-incoming-connection)
+      (1am:is (hunchentoot:stop (shiftf server nil) :soft t))
+      (1am:is (join-thread client-thread)))))
