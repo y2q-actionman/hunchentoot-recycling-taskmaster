@@ -105,7 +105,7 @@
      (unwind-protect
           (progn ,@body)
        (when ,server
-         (hunchentoot:stop ,server)))))
+         (hunchentoot:stop ,server :soft t)))))
 
 (defparameter *test-server-url*
   (format nil "http://127.0.0.1:~D/" *debug-server-port*))

@@ -24,11 +24,14 @@
                   (steal-threads))
                 (steal-threads)))))
     (dolist (thread thread-list)
+      ;; Uses `signal' instead of `error' because threads may be out
+      ;; of `handler-case' which handles
+      ;; `end-of-parallel-acceptor-thread'.
       (typecase thread
         (bt2:thread
-         (bt2:error-in-thread thread 'end-of-parallel-acceptor-thread))
+         (bt2:signal-in-thread thread 'end-of-parallel-acceptor-thread))
         (otherwise                      ; bt1 thread object.
-         (bt:interrupt-thread thread (lambda () (error 'end-of-parallel-acceptor-thread))))))
+         (bt:interrupt-thread thread (lambda () (signal 'end-of-parallel-acceptor-thread))))))
     (dolist (thread thread-list)
       (typecase thread
         (bt2:thread
