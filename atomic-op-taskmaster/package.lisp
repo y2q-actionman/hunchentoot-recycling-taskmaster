@@ -1,7 +1,8 @@
 (in-package :cl-user)
 
 (defpackage #:hunchentoot-atomic-op-taskmaster
-  (:use #:cl #:hunchentoot-recycling-taskmaster)
+  (:use #:cl #:hunchentoot-recycling-taskmaster
+        #:alexandria)
   (:export
    ;; On Hunchentoot
    #:atomic-taskmaster

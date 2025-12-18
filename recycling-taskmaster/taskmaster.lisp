@@ -207,7 +207,8 @@ Thread states:
         count it into deleted-cnt
         and do (remhash thread table)
       finally
-         (return (plusp deleted-cnt)))))
+         (return (if (plusp deleted-cnt)
+                     deleted-cnt)))))
 
 (defconstant +wake-acceptor-for-shutdown-timeout+ 1
   "The timeout used by

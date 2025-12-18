@@ -33,9 +33,6 @@ atomic integers."))
 (defmethod (setf taskmaster-thread-count) (value (taskmaster hunchentoot-atomic-op-taskmaster:atomic-taskmaster))
   (setf (bt2:atomic-integer-value (slot-value taskmaster 'thred-count)) value))
 
-(defmethod taskmaster-thread-count ((taskmaster hunchentoot-atomic-op-taskmaster:atomic-taskmaster))
-  (bt2:atomic-integer-value (slot-value taskmaster 'thread-count)))
-
 (defmethod increment-taskmaster-thread-count ((taskmaster hunchentoot-atomic-op-taskmaster:atomic-taskmaster))
   (when (taskmaster-max-thread-count taskmaster)
     (bt2:atomic-integer-incf (slot-value taskmaster 'thread-count))))
