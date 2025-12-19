@@ -1,15 +1,18 @@
 (in-package #:hunchentoot-recycling-taskmaster-test)
 
-(defparameter *test-acceptor-class*
-  'hunchentoot-recycling-taskmaster:parallel-easy-acceptor)
-
 (defparameter *test-port* 64241)
 
-(defun run-hunchentoot-tests ()
+(defun run-hunchentoot-tests
+    (&key (acceptor-class 'hunchentoot-recycling-taskmaster:parallel-easy-acceptor)
+       (taskmaster-class 'hunchentoot-recycling-taskmaster:recycling-taskmaster))
   "Copied from 'hunchentoot/run-test.lisp'"
+  (assert (subtypep acceptor-class 'hunchentoot:easy-acceptor))
   (format t "~&;; Starting web server on localhost:~A." *test-port*)
   (force-output)
-  (let ((server (hunchentoot:start (make-instance *test-acceptor-class* :port *test-port*))))
+  (let ((server (hunchentoot:start
+                 (make-instance acceptor-class
+                                :port *test-port*
+                                :taskmaster (make-instance taskmaster-class)))))
     (unwind-protect
          (progn
            (format t "~&;; Sleeping 2 seconds to give the server some time to start...")
@@ -22,7 +25,8 @@
       (force-output)
       (hunchentoot:stop server)
       (format t "~&;; Cleaning temporary files.")
-      (hunchentoot-test::clean-tmp-dir))))
+      (hunchentoot-test::clean-tmp-dir)))
+  t)
 
 (1am:test hunchentoot-tests
-  (run-hunchentoot-tests))
+  (1am:is (run-hunchentoot-tests)))

@@ -7,5 +7,6 @@
   :serial t
   :components ((:file "package")
                (:file "atomic")
-               (:file "atomic-recycling"))
+               (:file "atomic-recycling")
+               (:file "splited-thread-count"))
   :in-order-to ((test-op (test-op #:hunchentoot-atomic-op-taskmaster-test))))

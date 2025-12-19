@@ -16,5 +16,8 @@
    #:atomic-parallel-easy-ssl-acceptor
    #:atomic-recycling-taskmaster
    #:atomic-parallel-acceptor
+   ;; splited-thread-count-recycling-taskmaster
+   #:splited-thread-count-recycling-taskmaster
+   #:atomic-splited-thread-count-recycling-taskmaster
    ;; for internal use.
    #:*original-do-with-acceptor-request-count-incremented*))

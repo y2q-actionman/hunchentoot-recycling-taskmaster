@@ -28,10 +28,10 @@ atomic integers."))
     (bt2:atomic-integer-decf (slot-value taskmaster 'accept-count))))
 
 (defmethod taskmaster-thread-count ((taskmaster hunchentoot-atomic-op-taskmaster:atomic-taskmaster))
-  (bt2:atomic-integer-value (slot-value taskmaster 'thred-count)))
+  (bt2:atomic-integer-value (slot-value taskmaster 'thread-count)))
 
 (defmethod (setf taskmaster-thread-count) (value (taskmaster hunchentoot-atomic-op-taskmaster:atomic-taskmaster))
-  (setf (bt2:atomic-integer-value (slot-value taskmaster 'thred-count)) value))
+  (setf (bt2:atomic-integer-value (slot-value taskmaster 'thread-count)) value))
 
 (defmethod increment-taskmaster-thread-count ((taskmaster hunchentoot-atomic-op-taskmaster:atomic-taskmaster))
   (when (taskmaster-max-thread-count taskmaster)

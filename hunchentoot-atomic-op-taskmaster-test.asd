@@ -4,12 +4,11 @@
   :author "Yokota Yuki"
   :depends-on (#:hunchentoot-atomic-op-taskmaster
                #:1am
-               #:drakma)
+               #:hunchentoot-recycling-taskmaster-test)
   :pathname #.(make-pathname :directory '(:relative "test" "atomic-op-taskmaster-test"))
   :serial t
   :components ((:file "package")
-               ;; TODO
-               )
+               (:file "hunchentoot-tests"))
   :perform (prepare-op :before (o c)
                        (set (find-symbol* '#:*tests* '#:1am) '()))
   :perform (test-op (o s)
