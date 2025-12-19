@@ -99,38 +99,41 @@ Thread states:
   ()
   (:documentation "Thrown when parallel-acceptor-thread ends."))
 
-(defmethod make-parallel-acceptor-thread ((taskmaster recycling-taskmaster))
+(defun parallel-acceptor-thread-loop (taskmaster
+                                      &aux (acceptor (hunchentoot:taskmaster-acceptor taskmaster)))
+  "The main loop of worker threads of `recycling-taskmaster'"
+  (unwind-protect
+       (handler-case
+           (hunchentoot:accept-connections acceptor)
+         (end-of-parallel-acceptor-thread (e)
+           e)
+         (error (e)
+           (when (and
+                  (hunchentoot::with-lock-held
+                      ((hunchentoot::acceptor-shutdown-lock acceptor))
+                    (hunchentoot::acceptor-shutdown-p acceptor))
+                  (let ((sock (hunchentoot::acceptor-listen-socket acceptor)))
+                    (or (null sock)    ; may be nil if already closed.
+                        (not (open-stream-p sock)))))
+             ;; Here, our server was shutdown so the listen
+             ;; socket was closed by the one of
+             ;; parallel-acceptors.  accept(2) to a closed
+             ;; socket may cause EBADF.
+             (return-from parallel-acceptor-thread-loop e))
+           ;; otherwise, rethrow it.
+           (error e)))
+    (remove-recycling-taskmaster-thread taskmaster (bt:current-thread))))
+
+(defmethod make-parallel-acceptor-thread ((taskmaster recycling-taskmaster)
+                                          &key (thunk (lambda () (parallel-acceptor-thread-loop taskmaster))))
   "Makes a new thread for `parallel-acceptor'."
-  (let ((acceptor (hunchentoot:taskmaster-acceptor taskmaster)))
-    (flet ((thunk ()
-             (unwind-protect
-                  (handler-case
-                      (hunchentoot:accept-connections acceptor)
-                    (end-of-parallel-acceptor-thread (e)
-                      e)
-                    (error (e)
-                      (when (and
-                             (hunchentoot::with-lock-held
-                                 ((hunchentoot::acceptor-shutdown-lock acceptor))
-                               (hunchentoot::acceptor-shutdown-p acceptor))
-                             (let ((sock (hunchentoot::acceptor-listen-socket acceptor)))
-                               (or (null sock) ; may be nil if already closed.
-                                   (not (open-stream-p sock)))))
-                        ;; Here, our server was shutdown so the listen
-                        ;; socket was closed by the one of
-                        ;; parallel-acceptors.  accept(2) to a closed
-                        ;; socket may cause EBADF.
-                        (return-from thunk e))
-                      ;; otherwise, rethrow it.
-                      (error e)))
-               ;; For tracking threads at the end, removing from table is deferred to here.
-               (remove-recycling-taskmaster-thread taskmaster (bt:current-thread)))))
-      (let* ((name-sig (format nil "~A:~A" (or (hunchentoot:acceptor-address acceptor) "*")
-                               (hunchentoot:acceptor-port acceptor)))
-             (name (format nil (hunchentoot::taskmaster-worker-thread-name-format taskmaster)
-                           name-sig))
-             (thread (hunchentoot:start-thread taskmaster #'thunk :name name)))
-        (add-recycling-taskmaster-thread taskmaster thread)))))
+  (let* ((acceptor (hunchentoot:taskmaster-acceptor taskmaster))
+         (name-sig (format nil "~A:~A" (or (hunchentoot:acceptor-address acceptor) "*")
+                           (hunchentoot:acceptor-port acceptor)))
+         (name (format nil (hunchentoot::taskmaster-worker-thread-name-format taskmaster)
+                       name-sig))
+         (thread (hunchentoot:start-thread taskmaster thunk :name name)))
+    (add-recycling-taskmaster-thread taskmaster thread)))
 
 (defmethod hunchentoot:execute-acceptor :before ((taskmaster recycling-taskmaster))
   "Checks the type of ACCEPTOR slot, because recycling-taskmaster needs
@@ -182,11 +185,22 @@ This is used to determine whether a thread is recyclied or not."
 (defmethod hunchentoot:handle-incoming-connection ((taskmaster recycling-taskmaster) client-connection)
   "This function is the core of `recycling-taskmaster'. It is called
  in the loop of `hunchentoot:accept-connections' on every
- accept(2). It processes a client-connection by itself and controls
+ accept(2). It processes a client-connection by itself and/or controls
  how many threads working around the process. "
   (usocket:with-connected-socket (client-connection client-connection)
     (when (no-accepting-threads-p taskmaster)
-      (make-parallel-acceptor-thread taskmaster))
+      ;; NOTE: There are two options here: which thread, this thread
+      ;;  or a newly created thread, should handle the
+      ;;  CLIENT-CONNECTION.  I tried both and there are no
+      ;;  significant difference on performance. I thought going to
+      ;;  accept() by this thread is similar to the original
+      ;;  Hunchentoot. I do so as default.
+      #+recycling-taskmaster--always-process-connection-itself
+      (make-parallel-acceptor-thread taskmaster)
+      #-recycling-taskmaster--always-process-connection-itself
+      (return-from hunchentoot:handle-incoming-connection
+        (hunchentoot:create-request-handler-thread taskmaster
+                                                   (shiftf client-connection nil))))
     ;; process the connection by itself.
     (hunchentoot::handle-incoming-connection%
      taskmaster
@@ -196,10 +210,13 @@ This is used to determine whether a thread is recyclied or not."
       (error 'end-of-parallel-acceptor-thread))))
 
 (defmethod hunchentoot:create-request-handler-thread ((taskmaster recycling-taskmaster) client-connection)
-  "This method is never called for `recycling-taskmaster'. See
-`make-parallel-acceptor-thread' instead."
-  (declare (ignore client-connection))
-  (hunchentoot::not-implemented 'hunchentoot:create-request-handler-thread))
+  "Process CLIENT-CONNECTION and go to accept() new connections."
+  (flet ((thunk ()
+           (hunchentoot::handle-incoming-connection% taskmaster client-connection)
+           (when (enough-acceptings-threads-p taskmaster)
+             (return-from thunk nil))
+           (parallel-acceptor-thread-loop taskmaster)))
+    (make-parallel-acceptor-thread taskmaster :thunk #'thunk)))
 
 
 ;;; Shutdown
