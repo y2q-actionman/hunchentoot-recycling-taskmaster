@@ -1,12 +1,12 @@
 (in-package :cl-user)
 
-(ql:quickload "hunchentoot")
-(ql:quickload "hunchentoot-recycling-taskmaster")
-(ql:quickload "hunchentoot-atomic-op-taskmaster")
-(ql:quickload "cl-tbnl-gserver-tmgr")
-(ql:quickload "quux-hunchentoot")
+;; (ql:quickload "hunchentoot")
+;; (ql:quickload "hunchentoot-recycling-taskmaster")
+;; (ql:quickload "hunchentoot-atomic-op-taskmaster")
+;; (ql:quickload "cl-tbnl-gserver-tmgr")
+;; (ql:quickload "quux-hunchentoot")
 
-(ql:quickload "wookie")
+;; (ql:quickload "wookie")
 ;;; sudo apt install libuv1-dev
 ;;;
 ;;; [package cl-async-ssl]
@@ -16,7 +16,7 @@
 ;;;
 ;;; sudo apt install libssl-dev
 
-(ql:quickload "woo")
+;; (ql:quickload "woo")
 ;;; sudo apt install libev-dev
 ;;; https://lisp-journey.gitlab.io/blog/why-turtl-switched-from-lisp-to-js/
 ;;; https://news.ycombinator.com/item?id=29019217
@@ -25,13 +25,13 @@
 ;; https://www.reddit.com/r/Common_Lisp/comments/1hmxv4k/comment/m4feb4b/
 
 
-(ql:quickload "house")
+;; (ql:quickload "house")
 
 ;;; https://killtheradio.net/technology/cl-async-non-blocking-asynchronous-programming-for-common-lisp/
 
-(ql:quickload "clack")
+;; ;; (ql:quickload "clack")
 
-(ql:quickload "conserv")
+;; (ql:quickload "conserv")
 ;; sudo apt install libfixposix-dev
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -47,7 +47,7 @@
 (defparameter *test-keep-alive* t)
 (defparameter *test-no-keep-alive* t)
 
-(defconstant +sleep-seconds+ 0)        ; or 0.001. TODO: add Wookie support.
+(defconstant +sleep-seconds+ 0.0001)        ; 0 or 0.0001. TODO: add Wookie support.
 
 (defun run-wrk (host filename)
   (with-open-file (*standard-output* filename :direction :output :if-exists :rename)
