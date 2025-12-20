@@ -88,6 +88,16 @@ atomic integers."))
   "Replace original one to a trampoline to our generic function"
   (do-with-acceptor-request-count-incremented-gf *acceptor* function))
 
+(in-package #:hunchentoot-recycling-taskmaster)
+
+(defmethod count-busy-thread ((taskmaster hunchentoot-atomic-op-taskmaster:atomic-taskmaster))
+  (let ((acceptor (hunchentoot::taskmaster-acceptor taskmaster)))
+    (typecase acceptor
+      (hunchentoot-atomic-op-taskmaster:atomic-acceptor
+       (hunchentoot::acceptor-requests-in-progress acceptor))
+      (otherwise
+       (call-next-method)))))
+
 
 (in-package #:hunchentoot-atomic-op-taskmaster)
 
