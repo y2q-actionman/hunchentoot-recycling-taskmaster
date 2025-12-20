@@ -1,0 +1,38 @@
+digraph traditional_architecture {
+    rankdir=TB;
+    splines=true;
+    nodesep=0.8;
+    ranksep=1.2;
+
+    fontsize=20;
+    labelloc="t";
+    label="Traditional Hunchentoot Thread Model";
+
+    node [style=filled, color=white, shape=ellipse, fontsize=14];
+    edge [fontsize=12];
+
+    listen_socket [label="Listen Socket", shape=cylinder, style=filled, color=lightblue];
+
+    acceptor [label="Acceptor Thread"];
+    
+    acceptor -> listen_socket [label="1. calls accept()"];
+    listen_socket -> acceptor [label="2. gets connection", style=dashed];
+    
+    subgraph cluster_req1 {
+        label="Request 1";
+        style=dotted;
+        handler_1 [label="Handler Thread 1"];
+    }
+
+    subgraph cluster_req2 {
+        label="Request 2";
+        style=dotted;
+        handler_2 [label="Handler Thread 2"];
+    }
+
+    acceptor -> handler_1 [label="spawns"];
+    acceptor -> handler_2 [label="spawns"];
+    
+    handler_1 -> "done1" [label="handles & terminates", shape=plaintext, fontcolor=red];
+    handler_2 -> "done2" [label="handles & terminates", shape=plaintext, fontcolor=red];
+}

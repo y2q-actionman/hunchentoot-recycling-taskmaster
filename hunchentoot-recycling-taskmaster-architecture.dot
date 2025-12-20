@@ -1,0 +1,38 @@
+digraph recycling_architecture {
+    rankdir=TB;
+    fontsize=16;
+    labelloc="t";
+    label="Hunchentoot-Recycling-Taskmaster: Worker Loop Model";
+
+    node [shape=box, style=rounded, width=1.5, height=0.7];
+    edge [fontsize=10];
+
+    // Shared Listen Socket at the top
+    listen_socket [label="Listen Socket", shape=cylinder, style=filled, color=lightblue];
+
+    // --- Define Worker Clusters ---
+    subgraph cluster_w1 { label = "Worker 1"; style=dotted; w1_accept [label="Accept"]; w1_handle [label="Handle Request"]; }
+    subgraph cluster_w2 { label = "Worker 2"; style=dotted; w2_accept [label="Accept"]; w2_handle [label="Handle Request"]; }
+    subgraph cluster_w3 { label = "Worker 3"; style=dotted; w3_accept [label="Accept"]; w3_handle [label="Handle Request"]; }
+
+    // --- Align Workers Horizontally below the socket ---
+    // { rank = same; w1_handle; w2_handle; w3_handle; }
+
+    // --- Worker 1: Loop and Connection ---
+    w1_accept -> w1_handle;
+    w1_handle -> w1_accept [label="recycle", color=darkgreen, fontcolor=darkgreen];
+    w1_accept -> listen_socket [label="1. calls accept()", style=dashed];
+    listen_socket -> w1_accept [label="2. gets connection", style=dashed, color=blue, fontcolor=blue];
+
+    // --- Worker 2: Loop and Connection ---
+    w2_accept -> w2_handle;
+    w2_handle -> w2_accept [label="recycle", color=darkgreen, fontcolor=darkgreen];
+    w2_accept -> listen_socket [style=dashed];
+    listen_socket -> w2_accept [style=dashed, color=blue];
+
+    // --- Worker 3: Loop and Connection ---
+    w3_accept -> w3_handle;
+    w3_handle -> w3_accept [label="recycle", color=darkgreen, fontcolor=darkgreen];
+    w3_accept -> listen_socket [style=dashed];
+    listen_socket -> w3_accept [style=dashed, color=blue];
+}
