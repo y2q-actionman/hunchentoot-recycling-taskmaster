@@ -1,41 +1,5 @@
 (in-package :cl-user)
 
-;; (ql:quickload "hunchentoot")
-;; (ql:quickload "hunchentoot-recycling-taskmaster")
-;; (ql:quickload "hunchentoot-atomic-op-taskmaster")
-;; (ql:quickload "cl-tbnl-gserver-tmgr")
-;; (ql:quickload "quux-hunchentoot")
-
-;; (ql:quickload "wookie")
-;;; sudo apt install libuv1-dev
-;;;
-;;; [package cl-async-ssl]
-;;; Unable to load any of the alternatives:
-;;;    ("libcrypto.so.1.1" "libcrypto.so.1.0.2" "libcrypto.so")
-;;;    [Condition of type CFFI:LOAD-FOREIGN-LIBRARY-ERROR]
-;;;
-;;; sudo apt install libssl-dev
-
-;; (ql:quickload "woo")
-;;; sudo apt install libev-dev
-;;; https://lisp-journey.gitlab.io/blog/why-turtl-switched-from-lisp-to-js/
-;;; https://news.ycombinator.com/item?id=29019217
-;;; ????
-;;; https://github.com/TechEmpower/FrameworkBenchmarks/blob/master/frameworks/Lisp/woo/woo.ros
-;; https://www.reddit.com/r/Common_Lisp/comments/1hmxv4k/comment/m4feb4b/
-
-
-;; (ql:quickload "house")
-
-;;; https://killtheradio.net/technology/cl-async-non-blocking-asynchronous-programming-for-common-lisp/
-
-;; ;; (ql:quickload "clack")
-
-;; (ql:quickload "conserv")
-;; sudo apt install libfixposix-dev
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 (defun nproc ()
   (let ((nproc-str
           (with-output-to-string (*standard-output*)

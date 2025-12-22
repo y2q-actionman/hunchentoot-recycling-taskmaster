@@ -1,0 +1,42 @@
+#+TITLE: External dependencies of web servers
+#+DATE: <2025-12-22 Mon>
+
+* hunchentoot
+
+(nothing)
+
+* hunchentoot-recycling-taskmaster, hunchentoot-atomic-op-taskmaster
+
+(nothing)
+
+* cl-tbnl-gserver-tmgr
+
+(nothing)
+
+* quux-hunchentoot
+
+(nothing)
+
+* Wookie
+
+- libuv1-dev
+- libssl-dev
+
+#+begin_quote
+[package cl-async-ssl]
+Unable to load any of the alternatives:
+   ("libcrypto.so.1.1" "libcrypto.so.1.0.2" "libcrypto.so")
+   [Condition of type CFFI:LOAD-FOREIGN-LIBRARY-ERROR]
+#+end_quote
+
+* Woo
+
+- libev-dev
+
+* house
+
+(nothing)
+
+* conserv
+
+- libfixposix-dev
