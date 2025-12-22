@@ -89,11 +89,9 @@ Thread states:
     (let ((table (hunchentoot::acceptor-process taskmaster)))
       (remhash thread table))))
 
-(defmethod count-recycling-taskmaster-thread (taskmaster &key (lock t))
-  (if lock
-      (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
-        (hash-table-count (hunchentoot::acceptor-process taskmaster)))
-      (hash-table-count (hunchentoot::acceptor-process taskmaster))))
+(defmethod count-recycling-taskmaster-thread (taskmaster)
+  (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
+    (hash-table-count (hunchentoot::acceptor-process taskmaster))))
 
 (define-condition end-of-parallel-acceptor-thread (condition)
   ()
