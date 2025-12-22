@@ -17,6 +17,45 @@
 
 (nothing)
 
+** error caused at benchmarking
+
+#+begin_quote
+wrk -t16 -c400 -d10 "http://localhost:4242/yo"
+Running 10s test @ http://localhost:4242/yo
+  16 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.46ms    8.37ms 266.89ms   96.96%
+    Req/Sec    28.10k    20.39k   79.29k    59.67%
+  2029325 requests in 10.08s, 285.37MB read
+  Socket errors: connect 0, read 3507, write 1599, timeout 0
+  Non-2xx or 3xx responses: 5106
+Requests/sec: 201370.15
+Transfer/sec:     28.32MB
+
+↓
+
+Socket error in "accept": 24 (Too many open files)
+   [Condition of type SB-BSD-SOCKETS:SOCKET-ERROR]
+
+Restarts:
+ 0: [ABORT] abort thread (#<THREAD "quux-hunchentoot-listener-*:4242" RUNNING {1001340073}>)
+
+Backtrace:
+  0: (SB-BSD-SOCKETS:SOCKET-ERROR "accept" 24)
+  1: (SB-BSD-SOCKETS::CALL-WITH-SOCKET-ADDR #<SB-BSD-SOCKETS:INET-SOCKET 0.0.0.0:4242, fd: 4 {10013BC9C3}> NIL #<FUNCTION (FLET SB-BSD-SOCKETS::WITH-SOCKET-ADDR-THUNK :IN SB-BSD-SOCKETS:SOCKET-ACCEPT) {7F4..
+  2: ((:METHOD SB-BSD-SOCKETS:SOCKET-ACCEPT (SB-BSD-SOCKETS:SOCKET)) #<SB-BSD-SOCKETS:INET-SOCKET 0.0.0.0:4242, fd: 4 {10013BC9C3}>) [fast-method]
+  3: ((:METHOD USOCKET:SOCKET-ACCEPT (USOCKET:STREAM-SERVER-USOCKET)) #<USOCKET:STREAM-SERVER-USOCKET {10041356F3}> :ELEMENT-TYPE NIL) [fast-method]
+  4: ((:METHOD HUNCHENTOOT:ACCEPT-CONNECTIONS (HUNCHENTOOT:ACCEPTOR)) #<HUNCHENTOOT:EASY-ACCEPTOR (host *, port 4242)>) [fast-method]
+  5: ((LABELS BORDEAUX-THREADS::%BINDING-DEFAULT-SPECIALS-WRAPPER :IN BORDEAUX-THREADS::BINDING-DEFAULT-SPECIALS))
+  6: ((FLET SB-UNIX::BODY :IN SB-THREAD::RUN))
+  7: ((FLET "WITHOUT-INTERRUPTS-BODY-11" :IN SB-THREAD::RUN))
+  8: ((FLET SB-UNIX::BODY :IN SB-THREAD::RUN))
+  9: ((FLET "WITHOUT-INTERRUPTS-BODY-4" :IN SB-THREAD::RUN))
+ 10: (SB-THREAD::RUN)
+ 11: ("foreign function: call_into_lisp_")
+ 12: ("foreign function: funcall1")
+#+end_quote
+
 * Wookie
 
 - libuv1-dev
@@ -40,3 +79,37 @@ Unable to load any of the alternatives:
 * conserv
 
 - libfixposix-dev
+
+* teepeedee
+
+Not loadable
+
+#+begin_quote
+(ql:quickload "teepeedee2")
+http://common-lisp.net/projects/teepeedee2/
+Heap exhausted during garbage collection: 96 bytes available, 304 requested.
+        Immobile Object Counts
+ Gen layout fdefn symbol   code  Boxed   Cons    Raw   Code  SmMix  Mixed  LgRaw LgCode  LgMix Waste%       Alloc        Trig   Dirty GCs Mem-age
+  0      0      0      0      0    346    147     13      0     21   1674      0      0      5    4.0    69430416    26850170       -   1  0.0000
+  1      0      0      0      0    997    306   1106      2     58     42      0      0     15    3.9    79522912    10737418    1693   0  0.4231
+  2     16    314     53    248   4189    939    847     18    187    155      0      0      0    1.2   205070912    50404490    1669   1  0.6734
+  3    483   8672   2234   8103  10243   2688   7247     39    472    299     26      0     72    5.1   655933392     2000000    7665   0  0.5763
+  4      0      0      0      0      0      0      0      0      0      0      0      0      0    0.0           0     2000000       0   0  0.0000
+  5      0      0      0      0      0      0      0      0      0      0      0      0      0    0.0           0     2000000       0   0  0.0000
+fatal error encountered in SBCL pid 1954247 tid 1954247:
+GC invariant lost, file "gencgc.c", line 523
+
+Welcome to LDB, a low-level debugger for the Lisp runtime environment.
+(GC in progress, oldspace=0, newspace=1)
+
+ldb> backtrace
+Backtrace:
+ ...
+
+16: fp=0x7fa2cd55d220 pc=0x52c1f7fa (LAMBDA (SB-KERNEL::FORM &KEY :CURRENT-INDEX &ALLOW-OTHER-KEYS) :IN SB-C::SUB-COMPILE-FILE)
+17: fp=0x7fa2cd55d2d8 pc=0x52b83e80 SB-C::%DO-FORMS-FROM-INFO
+18: fp=0x7fa2cd55d398 pc=0x52c1df9b (FLET "LAMBDA0" :IN "SYS:SRC;COMPILER;MAIN.LISP")
+19: fp=0x7fa2cd55d440 pc=0x52b835f4 (FLET SB-C::WITH-IT :IN SB-C::%WITH-COMPILATION-UNIT)
+20: fp=0x7fa2cd55d598 pc=0x52c1efb5 SB-C::SUB-COMPILE-FILE
+21: fp=0x7fa2cd55d6d0 pc=0x5311d0f3 COMPILE-FILE
+#+end_quote

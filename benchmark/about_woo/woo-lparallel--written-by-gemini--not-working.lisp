@@ -80,3 +80,14 @@
 
 ;; REPLから (start-server) で起動
 ;; (stop-server) で停止
+
+
+
+#|
+$ curl -v http://localhost:5000/sleep
+
+
+Callback Error: the message-complete callback failed
+  The value of LPARALLEL.KERNEL:CHANNEL is #<FUNCTION (LAMBDA (DUMMY-ARG) :IN "woo-code-written-by-gemini.lisp") {1003E212AB}>, which is not of type LPARALLEL.KERNEL:CHANNEL.
+   [Condition of type FAST-HTTP.ERROR:CB-MESSAGE-COMPLETE]
+|#
