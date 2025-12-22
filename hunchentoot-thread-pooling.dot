@@ -1,4 +1,4 @@
-digraph traditional_architecture {
+digraph thread_pooling_architecture {
     rankdir=TB;
     splines=true;
     nodesep=0.8;
@@ -6,7 +6,7 @@ digraph traditional_architecture {
 
     fontsize=20;
     labelloc="t";
-    label="Traditional Hunchentoot Thread Model";
+    label="Thread-pooling Model";
 
     node [style=filled, color=white, shape=ellipse, fontsize=14];
     edge [fontsize=12];
@@ -14,33 +14,37 @@ digraph traditional_architecture {
     listen_socket [label="Listen Socket", shape=cylinder, style=filled, color=lightblue];
 
     acceptor [label="Acceptor Thread"];
-    
+
     acceptor -> listen_socket [label="calls accept()", style=dashed];
     listen_socket -> acceptor [label="gets connection", color=blue];
-    
+
+    queue [label="Queue", shape=cylinder, style=filled, color=lightblue];
+    acceptor -> queue [label="enqueue", color=blue];
+
+
     subgraph cluster_req1 {
-        label="Request 1";
+        label="Worker 1";
         style=dotted;
         handler_1 [label="Handler Thread 1"];
     }
 
     subgraph cluster_req2 {
-        label="Request 2";
+        label="Worker 2";
         style=dotted;
         handler_2 [label="Handler Thread 2"];
     }
 
     subgraph cluster_req3 {
-        label="Request 3";
+        label="Worker 3";
         style=dotted;
         handler_3 [label="Handler Thread 3"];
     }
 
-    acceptor -> handler_1 [label="spawns", color=blue];
-    acceptor -> handler_2 [label="spawns", color=blue];
-    acceptor -> handler_3 [label="spawns", color=blue];
-    
-    handler_1 -> "" [label="handles & terminates", shape=plaintext, fontcolor=red, color=red, style=dashed];
-    handler_2 -> " " [label="handles & terminates", shape=plaintext, fontcolor=red, color=red, style=dashed];
-    handler_3 -> "  " [label="handles & terminates", shape=plaintext, fontcolor=red, color=red, style=dashed];
+    queue -> handler_1 [label="dequeue", color=blue];
+    queue -> handler_2 [color=blue];
+    queue -> handler_3 [color=blue];
+
+    handler_1 -> queue [style=dashed, color=darkgreen];
+    handler_2 -> queue [style=dashed, color=darkgreen];
+    handler_3 -> queue [style=dashed, color=darkgreen];
 }

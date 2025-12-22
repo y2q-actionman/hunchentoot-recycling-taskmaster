@@ -19,20 +19,20 @@ digraph recycling_architecture {
     // { rank = same; w1_handle; w2_handle; w3_handle; }
 
     // --- Worker 1: Loop and Connection ---
-    w1_accept -> w1_handle;
-    w1_handle -> w1_accept [label="recycle", color=darkgreen, fontcolor=darkgreen];
-    w1_accept -> listen_socket [label="1. calls accept()", style=dashed];
-    listen_socket -> w1_accept [label="2. gets connection", style=dashed, color=blue, fontcolor=blue];
+    w1_accept -> w1_handle [color=blue];
+    w1_handle -> w1_accept [color=darkgreen, fontcolor=darkgreen, style=dashed];
+    w1_accept -> listen_socket [label="calls accept()", style=dashed];
+    listen_socket -> w1_accept [label="gets connection", color=blue, fontcolor=blue];
 
     // --- Worker 2: Loop and Connection ---
-    w2_accept -> w2_handle;
-    w2_handle -> w2_accept [label="recycle", color=darkgreen, fontcolor=darkgreen];
+    w2_accept -> w2_handle [color=blue];
+    w2_handle -> w2_accept [color=darkgreen, fontcolor=darkgreen, style=dashed];
     w2_accept -> listen_socket [style=dashed];
-    listen_socket -> w2_accept [style=dashed, color=blue];
+    listen_socket -> w2_accept [color=blue];
 
     // --- Worker 3: Loop and Connection ---
-    w3_accept -> w3_handle;
-    w3_handle -> w3_accept [label="recycle", color=darkgreen, fontcolor=darkgreen];
+    w3_accept -> w3_handle [color=blue];
+    w3_handle -> w3_accept [color=darkgreen, fontcolor=darkgreen, style=dashed];
     w3_accept -> listen_socket [style=dashed];
-    listen_socket -> w3_accept [style=dashed, color=blue];
+    listen_socket -> w3_accept [color=blue];
 }
