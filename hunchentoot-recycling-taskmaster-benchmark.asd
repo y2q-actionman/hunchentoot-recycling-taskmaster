@@ -11,16 +11,18 @@
    #:quux-hunchentoot
 
    #:house
-   ;; #:teepeedee2 ; causes crash at loading on SBCL.
+   ;; #:teepeedee2 ; causes crash at loading on SBCL and AllegroCL.
 
-   ;; They have dependencies to external C libraties.
-   #:conserv
-   #:wookie
-   #:woo)
+   ;; They have dependencies to external C libraries, and AllegroCL cannot load then.
+   (:feature :sbcl #:conserv)
+   (:feature :sbcl #:wookie)
+   (:feature :sbcl #:woo))
   :pathname #.(make-pathname :directory '(:relative "benchmark"))
   :serial t
   :components ((:file "package")
                (:file "util")
-               (:file "benchmark"))
+               (:file "benchmark")
+               (:file "benchmark-sbcl" :if-feature :sbcl)
+               (:file "run"))
   :perform (test-op (o s)
-                    (symbol-call '#:hunchentoot-recycling-taskmaster-benchmark '#:bench-all)))
+                    (symbol-call '#:hunchentoot-recycling-taskmaster-benchmark '#:run)))
