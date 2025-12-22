@@ -9,143 +9,92 @@
   (when (plusp +sleep-seconds+)
     (sleep +sleep-seconds+)))
 
-;;; Hunchentoot
+;;; Hunchentoot and its families.
 
 (hunchentoot:define-easy-handler (say-yo :uri "/yo") (name)
   (handler-small-sleep)
   (setf (hunchentoot:content-type*) "text/plain")
   (format nil "Hey~@[ ~A~]!" name))
 
-(defun bench-hunchentoot ()
-  (let ((server (make-instance 'hunchentoot:easy-acceptor
+(defun bench-hunchentoot-using-class (acceptor-class taskmaster-class log-file-name)
+  (assert (subtypep acceptor-class 'hunchentoot:easy-acceptor))
+  (let ((server (make-instance acceptor-class
+                               :taskmaster (make-instance taskmaster-class)
                                :message-log-destination nil
                                :access-log-destination nil
                                :port 4242)))
     (hunchentoot:start server)
     (unwind-protect
-         (run-wrk "http://localhost:4242/yo" "hunchentoot_default.log")
+         (run-wrk "http://localhost:4242/yo" log-file-name)
       (hunchentoot:stop server :soft t))
     server))
+
+(defun bench-hunchentoot ()
+  (bench-hunchentoot-using-class 'hunchentoot:easy-acceptor
+                                 'hunchentoot:one-thread-per-connection-taskmaster
+                                 "hunchentoot_default.log"))
 
 ;;; hunchentoot-atomic-op-taskmaster
 
 (defun bench-hunchentoot-atomic-taskmaster ()
-  (let ((server (make-instance 'hunchentoot:easy-acceptor
-                               :message-log-destination nil
-                               :access-log-destination nil
-                               :port 4242
-                               :taskmaster (make-instance 'hunchentoot-atomic-op-taskmaster:atomic-taskmaster))))
-    (hunchentoot:start server)
-    (unwind-protect
-         (run-wrk "http://localhost:4242/yo" "hunchentoot_atomic-taskmaster_default.log")
-      (hunchentoot:stop server :soft t))
-    server))
+  (bench-hunchentoot-using-class 'hunchentoot:easy-acceptor
+                                 'hunchentoot-atomic-op-taskmaster:atomic-taskmaster
+                                 "hunchentoot_atomic-taskmaster_default.log"))
 
 (defun bench-hunchentoot-atomic-acceptor ()
-  (let ((server (make-instance 'hunchentoot-atomic-op-taskmaster:atomic-easy-acceptor
-                               :message-log-destination nil
-                               :access-log-destination nil
-                               :port 4242)))
-    (hunchentoot:start server)
-    (unwind-protect
-         (run-wrk "http://localhost:4242/yo" "hunchentoot_atomic-acceptor_default.log")
-      (hunchentoot:stop server :soft t))
-    server))
+  (bench-hunchentoot-using-class 'hunchentoot-atomic-op-taskmaster:atomic-easy-acceptor
+                                 'hunchentoot:one-thread-per-connection-taskmaster
+                                 "hunchentoot_atomic-acceptor_default.log"))
 
 (defun bench-hunchentoot-atomic-all ()
-  (let ((server (make-instance 'hunchentoot-atomic-op-taskmaster:atomic-easy-acceptor
-                               :message-log-destination nil
-                               :access-log-destination nil
-                               :port 4242
-                               :taskmaster (make-instance 'hunchentoot-atomic-op-taskmaster:atomic-taskmaster))))
-    (hunchentoot:start server)
-    (unwind-protect
-         (run-wrk "http://localhost:4242/yo" "hunchentoot_atomic-all_default.log")
-      (hunchentoot:stop server :soft t))
-    server))
+  (bench-hunchentoot-using-class 'hunchentoot-atomic-op-taskmaster:atomic-easy-acceptor
+                                 'hunchentoot-atomic-op-taskmaster:atomic-taskmaster
+                                 "hunchentoot_atomic-all_default.log"))
 
 ;;; hunchentoot-recycling-taskmaster
 
 (defparameter *hunchentoot-recycling-taskmaster-default-thread-count*
   hunchentoot-recycling-taskmaster::*default-initial-thread-count*)
 
-(defun bench-hunchentoot-recycling-taskmaster (&optional (threads-list '(8)))
+(defun bench-hunchentoot-family-per-threads (acceptor-class taskmaster-class logname-prefix threads-list)
   (loop
     for threads in threads-list
-    as logname = (format nil "hunchentoot-recycling-taskmaster_threads-~A~@[-default~*~].log"
-                         threads
+    as logname = (format nil "~A_threads-~A~@[-default~*~].log"
+                         logname-prefix threads
                          (eql threads *hunchentoot-recycling-taskmaster-default-thread-count*))
-    as taskmaster = (make-instance 'hunchentoot-recycling-taskmaster:recycling-taskmaster
-                                   :initial-thread-count threads)
-    as server = (make-instance 'hunchentoot-recycling-taskmaster:parallel-easy-acceptor
-                               :message-log-destination nil
-                               :access-log-destination nil
-                               :port 4242
-                               :taskmaster taskmaster)
-    collect server
-    do (hunchentoot:start server)
-       (unwind-protect
-            (run-wrk "http://localhost:4242/yo" logname)
-         (hunchentoot:stop server :soft t))))
+    collect
+    (let ((hunchentoot-recycling-taskmaster:*default-initial-thread-count* threads))
+      (bench-hunchentoot-using-class acceptor-class taskmaster-class logname))))
+
+(defun bench-hunchentoot-recycling-taskmaster (&optional (threads-list '(8)))
+  (bench-hunchentoot-family-per-threads
+   'hunchentoot-recycling-taskmaster:parallel-easy-acceptor
+   'hunchentoot-recycling-taskmaster:recycling-taskmaster
+   "hunchentoot-recycling-taskmaster"
+   threads-list))
 
 ;;; hunchentoot-recycling-taskmaster + atomic-op
 
 (defun bench-hunchentoot-recycling-taskmaster-atomic-all (&optional (threads-list '(8)))
-  (loop
-    for threads in threads-list
-    as logname = (format nil "hunchentoot-recycling-taskmaster-atomic-all_threads-~A~@[-default~*~].log"
-                         threads
-                         (eql threads *hunchentoot-recycling-taskmaster-default-thread-count*))
-    as taskmaster = (make-instance 'hunchentoot-atomic-op-taskmaster:atomic-recycling-taskmaster
-                                   :initial-thread-count threads)
-    as server = (make-instance 'hunchentoot-atomic-op-taskmaster:atomic-parallel-easy-acceptor
-                               :message-log-destination nil
-                               :access-log-destination nil
-                               :port 4242
-                               :taskmaster taskmaster)
-    collect server
-    do (hunchentoot:start server)
-       (unwind-protect
-            (run-wrk "http://localhost:4242/yo" logname)
-         (hunchentoot:stop server :soft t))))
+  (bench-hunchentoot-family-per-threads
+   'hunchentoot-atomic-op-taskmaster:atomic-parallel-easy-acceptor
+   'hunchentoot-atomic-op-taskmaster:atomic-recycling-taskmaster
+   "hunchentoot-recycling-taskmaster-atomic-all"
+   threads-list))
 
 (defun bench-hunchentoot-recycling-taskmaster-atomic-acceptor (&optional (threads-list '(8)))
-  (loop
-    for threads in threads-list
-    as logname = (format nil "hunchentoot-recycling-taskmaster-atomic-acceptor_threads-~A~@[-default~*~].log"
-                         threads
-                         (eql threads *hunchentoot-recycling-taskmaster-default-thread-count*))
-    as taskmaster = (make-instance 'hunchentoot-recycling-taskmaster:recycling-taskmaster
-                                   :initial-thread-count threads)
-    as server = (make-instance 'hunchentoot-atomic-op-taskmaster:atomic-parallel-easy-acceptor
-                               :message-log-destination nil
-                               :access-log-destination nil
-                               :port 4242
-                               :taskmaster taskmaster)
-    collect server
-    do (hunchentoot:start server)
-       (unwind-protect
-            (run-wrk "http://localhost:4242/yo" logname)
-         (hunchentoot:stop server :soft t))))
+  (bench-hunchentoot-family-per-threads
+   'hunchentoot-atomic-op-taskmaster:atomic-parallel-easy-acceptor
+   'hunchentoot-recycling-taskmaster:recycling-taskmaster
+   "hunchentoot-recycling-taskmaster-atomic-acceptor"
+   threads-list))
 
 (defun bench-hunchentoot-recycling-taskmaster-atomic-taskmaster (&optional (threads-list '(8)))
-  (loop
-    for threads in threads-list
-    as logname = (format nil "hunchentoot-recycling-taskmaster-atomic-taskmaster_threads-~A~@[-default~*~].log"
-                         threads
-                         (eql threads *hunchentoot-recycling-taskmaster-default-thread-count*))
-    as taskmaster = (make-instance 'hunchentoot-atomic-op-taskmaster:atomic-recycling-taskmaster
-                                   :initial-thread-count threads)
-    as server = (make-instance 'hunchentoot-recycling-taskmaster:parallel-easy-acceptor
-                               :message-log-destination nil
-                               :access-log-destination nil
-                               :port 4242
-                               :taskmaster taskmaster)
-    collect server
-    do (hunchentoot:start server)
-       (unwind-protect
-            (run-wrk "http://localhost:4242/yo" logname)
-         (hunchentoot:stop server :soft t))))
+  (bench-hunchentoot-family-per-threads
+   'hunchentoot-recycling-taskmaster:parallel-easy-acceptor
+   'hunchentoot-atomic-op-taskmaster:atomic-recycling-taskmaster
+   "hunchentoot-recycling-taskmaster-atomic-taskmaster"
+   threads-list))
 
 ;;; cl-tbnl-gserver-tmgr
 

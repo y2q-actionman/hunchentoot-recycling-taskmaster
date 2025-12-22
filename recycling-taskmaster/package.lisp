@@ -3,6 +3,7 @@
 (defpackage #:hunchentoot-recycling-taskmaster
   (:use #:cl #:alexandria)
   (:export
+   #:*default-initial-thread-count*
    #:recycling-taskmaster
    #:parallel-acceptor
    #:parallel-easy-acceptor
