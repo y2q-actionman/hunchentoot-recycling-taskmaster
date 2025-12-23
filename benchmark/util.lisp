@@ -21,9 +21,6 @@
 
 (defvar *output-directory* (generate-output-directory-path))
 
-(defun set-output-directory ()
-  (setf *output-directory* (generate-output-directory-path)))
-
 (defun run-wrk (host filename &key (duration *wrk-duration*))
   (ensure-directories-exist *output-directory*)
   (with-open-file (*standard-output* (merge-pathnames filename *output-directory*) 
@@ -52,5 +49,12 @@
 
 (defparameter *handler-sleep-seconds* 0.0001) ; 0 or 0.0001.
 
+(defun handler-small-sleep ()
+  (when (plusp *handler-sleep-seconds*)
+    (sleep *handler-sleep-seconds*)))
+
 (defun wait-for-starting-server ()
   (sleep 1))
+
+(defparameter *system-info-filename* "system-info.txt"
+  "made by `prepare'")
