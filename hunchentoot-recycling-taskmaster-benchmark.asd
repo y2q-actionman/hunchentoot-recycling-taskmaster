@@ -33,8 +33,6 @@
                (:file "wookie" :if-feature :sbcl)
                (:file "woo" :if-feature :sbcl)
                (:file "run"))
-  :perform (prepare-op :before (o c)
-                       (symbol-call '#:hunchentoot-recycling-taskmaster-benchmark
-                                    '#:prepare))
   :perform (test-op (o s)
+                    (symbol-call '#:hunchentoot-recycling-taskmaster-benchmark '#:prepare)
                     (symbol-call '#:hunchentoot-recycling-taskmaster-benchmark '#:run)))
