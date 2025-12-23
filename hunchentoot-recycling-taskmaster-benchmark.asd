@@ -22,7 +22,11 @@
   :serial t
   :components ((:file "package")
                (:file "util")
-               (:file "hunchentoot-and-families")
+               (:file "hunchentoot")
+               (:file "hunchentoot-recycling-taskmaster")
+               (:file "hunchentoot-atomic-op-taskmaster")
+               (:file "cl-tbnl-gserver-tmgr")
+               (:file "quux-hunchentoot")
                (:file "house")
                ;; TODO: teepeedee2
                (:file "conserv" :if-feature :sbcl)
