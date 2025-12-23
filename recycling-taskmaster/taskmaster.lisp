@@ -71,7 +71,8 @@ Thread states:
                    (max-thread-count hunchentoot:taskmaster-max-thread-count)
                    (max-accept-count hunchentoot:taskmaster-max-accept-count))
       taskmaster
-    (check-type initial integer)
+    (unless (typep initial 'integer)
+      (hunchentoot:parameter-error "INITIAL-THREAD-COUNT must be an integer."))
     (when (and max-thread-count
                (not (<= initial max-thread-count)))
       (hunchentoot:parameter-error "INITIAL-THREAD-COUNT must be equal or less than MAX-THREAD-COUNT"))
