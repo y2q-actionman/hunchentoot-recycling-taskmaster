@@ -1,13 +1,8 @@
 (in-package :hunchentoot-recycling-taskmaster-benchmark)
 
-(defconstant +sleep-seconds+ 0.0001)        ; 0 or 0.0001. TODO: add Wookie support.
-
-(defun wait-for-starting-server ()
-  (sleep 1))
-
 (defun handler-small-sleep ()
-  (when (plusp +sleep-seconds+)
-    (sleep +sleep-seconds+)))
+  (when (plusp *handler-sleep-seconds*)
+    (sleep *handler-sleep-seconds*)))
 
 ;;; Hunchentoot and its families.
 

@@ -18,9 +18,9 @@
   ;; see `handler-small-sleep'
   (flet ((thunk ()
            (wookie:send-response res :body "Hello, World!")))
-    (if (plusp +sleep-seconds+)
+    (if (plusp *handler-sleep-seconds*)
         (cl-async:delay #'thunk
-          :time +sleep-seconds+)
+          :time *handler-sleep-seconds*)
         (thunk))))
 
 (defun start-wookie-server ()     ; from wookie-doc/views/doc/index.md
@@ -137,7 +137,7 @@
 
 (defmethod conserv.http:on-http-request ((driver hello))
   ;; XXX: FIXME: how to sleep here, what is alternative of (handler-small-sleep)
-  ;; (conserv.tcp:tcp-listener-pause driver :timeout +sleep-seconds+)
+  ;; (conserv.tcp:tcp-listener-pause driver :timeout *handler-sleep-seconds*)
   (conserv.http:set-headers conserv.http:*request* :content-type "text/html")
   (format conserv.http:*request* "<h1>Hello, world!</h1>")
   (close conserv.http:*request*))

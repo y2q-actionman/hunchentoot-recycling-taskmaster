@@ -49,3 +49,8 @@
               do (run-tcd threads connections t)
             if *test-no-keep-alive*
               do (run-tcd threads connections nil)))))
+
+(defparameter *handler-sleep-seconds* 0.0001) ; 0 or 0.0001.
+
+(defun wait-for-starting-server ()
+  (sleep 1))
