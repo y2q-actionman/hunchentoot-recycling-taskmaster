@@ -12,8 +12,22 @@
 (defparameter *test-keep-alive* t)
 (defparameter *test-no-keep-alive* t)
 
+(defun generate-output-directory-path ()
+  (multiple-value-bind (sec min hour day month year)
+      (get-decoded-time)
+    (let ((dir-name (format nil "~4,'0D-~2,'0D-~2,'0DT~2,'0D:~2,'0D:~2,'0D"
+                            year month day hour min sec)))
+      (make-pathname :directory (list :relative "benchmark" dir-name)))))
+
+(defvar *output-directory* (generate-output-directory-path))
+
+(defun set-output-directory ()
+  (setf *output-directory* (generate-output-directory-path)))
+
 (defun run-wrk (host filename &key (duration *wrk-duration*))
-  (with-open-file (*standard-output* filename :direction :output :if-exists :rename)
+  (ensure-directories-exist *output-directory*)
+  (with-open-file (*standard-output* (merge-pathnames filename *output-directory*) 
+                                     :direction :output :if-exists :rename)
     (format t "~A ~A ~A~2%"
             filename  (lisp-implementation-type) (lisp-implementation-version))
     (finish-output)

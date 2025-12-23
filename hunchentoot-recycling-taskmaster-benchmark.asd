@@ -25,5 +25,8 @@
                (:file "benchmark")
                (:file "benchmark-sbcl" :if-feature :sbcl)
                (:file "run"))
+  :perform (prepare-op :before (o c)
+                       (symbol-call '#:hunchentoot-recycling-taskmaster-benchmark
+                                    '#:set-output-directory))
   :perform (test-op (o s)
                     (symbol-call '#:hunchentoot-recycling-taskmaster-benchmark '#:run)))

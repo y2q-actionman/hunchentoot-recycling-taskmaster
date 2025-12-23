@@ -2,4 +2,5 @@
 
 (defpackage #:hunchentoot-recycling-taskmaster-benchmark
   (:use :cl)
-  (:export #:run))
+  (:export #:set-output-directory
+           #:run))
