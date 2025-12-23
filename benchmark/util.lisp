@@ -9,6 +9,10 @@
 (defparameter *nproc* (nproc))
 
 (defparameter *wrk-duration* 10)
+(defparameter *wrk-threads-and-connections*
+  '((4 100) (4 10) (16 400))
+  "derived from cl-tbnl-gserver-tmgr")
+
 (defparameter *test-keep-alive* t)
 (defparameter *test-no-keep-alive* t)
 
@@ -20,6 +24,11 @@
       (make-pathname :directory (list :relative "benchmark" dir-name)))))
 
 (defvar *output-directory* (generate-output-directory-path))
+
+(defparameter *handler-sleep-seconds* 0.001) ; 1ms
+
+(defparameter *system-info-filename* "system-info.txt"
+  "made by `prepare'")
 
 (defun write-system-info (stream)
   (let ((system-symbols
@@ -37,7 +46,8 @@
           finally
              (loop for (k v) in data
                    do (format stream "~vA	~vA~%"
-                              max-name-len k max-value-len v)))))
+                              max-name-len k max-value-len v)))
+    (format stream "~&*handler-sleep-seconds*~C~F~%" #\tab *handler-sleep-seconds*)))
 
 (defun run-wrk (host filename asdf-system-name &key (duration *wrk-duration*))
   (ensure-directories-exist *output-directory*)
@@ -63,13 +73,11 @@
                (uiop:run-program (list* "wrk" options) :output t))
              (terpri)
              (finish-output)))
-      (loop for (threads connections) in '((4 100) (4 10) (16 400))
+      (loop for (threads connections) in *wrk-threads-and-connections*
             if *test-keep-alive*
               do (run-tcd threads connections t)
             if *test-no-keep-alive*
               do (run-tcd threads connections nil)))))
-
-(defparameter *handler-sleep-seconds* 0.0001) ; 0 or 0.0001.
 
 (defun handler-small-sleep ()
   (when (plusp *handler-sleep-seconds*)
@@ -77,6 +85,3 @@
 
 (defun wait-for-starting-server ()
   (sleep 1))
-
-(defparameter *system-info-filename* "system-info.txt"
-  "made by `prepare'")
