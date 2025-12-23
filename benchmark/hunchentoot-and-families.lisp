@@ -7,7 +7,7 @@
   (setf (hunchentoot:content-type*) "text/plain")
   (format nil "Hey~@[ ~A~]!" name))
 
-(defun bench-hunchentoot-using-class (acceptor-class taskmaster-class log-file-name
+(defun bench-hunchentoot-using-class (acceptor-class taskmaster-class log-file-name asdf-system-name
                                       &key taskmaster-args)
   (assert (subtypep acceptor-class 'hunchentoot:easy-acceptor))
   (let ((server (make-instance acceptor-class
@@ -17,31 +17,35 @@
                                :port 4242)))
     (hunchentoot:start server)
     (unwind-protect
-         (run-wrk "http://localhost:4242/yo" log-file-name)
+         (run-wrk "http://localhost:4242/yo" log-file-name asdf-system-name)
       (hunchentoot:stop server :soft t))
     server))
 
 (defun bench-hunchentoot ()
   (bench-hunchentoot-using-class 'hunchentoot:easy-acceptor
                                  'hunchentoot:one-thread-per-connection-taskmaster
-                                 "hunchentoot_default.log"))
+                                 "hunchentoot_default.log"
+                                 :hunchentoot))
 
 ;;; hunchentoot-atomic-op-taskmaster
 
 (defun bench-hunchentoot-atomic-taskmaster ()
   (bench-hunchentoot-using-class 'hunchentoot:easy-acceptor
                                  'hunchentoot-atomic-op-taskmaster:atomic-taskmaster
-                                 "hunchentoot_atomic-taskmaster_default.log"))
+                                 "hunchentoot_atomic-taskmaster_default.log"
+                                 :hunchentoot-atomic-op-taskmaster))
 
 (defun bench-hunchentoot-atomic-acceptor ()
   (bench-hunchentoot-using-class 'hunchentoot-atomic-op-taskmaster:atomic-easy-acceptor
                                  'hunchentoot:one-thread-per-connection-taskmaster
-                                 "hunchentoot_atomic-acceptor_default.log"))
+                                 "hunchentoot_atomic-acceptor_default.log"
+                                 :hunchentoot-atomic-op-taskmaster))
 
 (defun bench-hunchentoot-atomic-all ()
   (bench-hunchentoot-using-class 'hunchentoot-atomic-op-taskmaster:atomic-easy-acceptor
                                  'hunchentoot-atomic-op-taskmaster:atomic-taskmaster
-                                 "hunchentoot_atomic-all_default.log"))
+                                 "hunchentoot_atomic-all_default.log"
+                                 :hunchentoot-atomic-op-taskmaster))
 
 ;;; hunchentoot-recycling-taskmaster
 
@@ -49,6 +53,7 @@
   hunchentoot-recycling-taskmaster::*default-initial-thread-count*)
 
 (defun bench-hunchentoot-family-per-threads (acceptor-class taskmaster-class logname-prefix
+                                             asdf-system-name
                                              taskmaster-thread-argname threads-list
                                              threads-default-count)
   (loop
@@ -57,7 +62,7 @@
                          logname-prefix threads
                          (eql threads threads-default-count))
     collect
-    (bench-hunchentoot-using-class acceptor-class taskmaster-class logname
+    (bench-hunchentoot-using-class acceptor-class taskmaster-class logname asdf-system-name
                                    :taskmaster-args (list taskmaster-thread-argname threads))))
 
 (defun bench-hunchentoot-recycling-taskmaster (&optional (threads-list '(8)))
@@ -65,6 +70,7 @@
    'hunchentoot-recycling-taskmaster:parallel-easy-acceptor
    'hunchentoot-recycling-taskmaster:recycling-taskmaster
    "hunchentoot-recycling-taskmaster"
+   :hunchentoot-recycling-taskmaster
    :initial-thread-count threads-list
    *hunchentoot-recycling-taskmaster-default-thread-count*))
 
@@ -75,6 +81,7 @@
    'hunchentoot-atomic-op-taskmaster:atomic-parallel-easy-acceptor
    'hunchentoot-atomic-op-taskmaster:atomic-recycling-taskmaster
    "hunchentoot-recycling-taskmaster-atomic-all"
+   :hunchentoot-atomic-op-taskmaster
    :initial-thread-count threads-list
    *hunchentoot-recycling-taskmaster-default-thread-count*))
 
@@ -83,6 +90,7 @@
    'hunchentoot-atomic-op-taskmaster:atomic-parallel-easy-acceptor
    'hunchentoot-recycling-taskmaster:recycling-taskmaster
    "hunchentoot-recycling-taskmaster-atomic-acceptor"
+   :hunchentoot-atomic-op-taskmaster
    :initial-thread-count threads-list
    *hunchentoot-recycling-taskmaster-default-thread-count*))
 
@@ -91,6 +99,7 @@
    'hunchentoot-recycling-taskmaster:parallel-easy-acceptor
    'hunchentoot-atomic-op-taskmaster:atomic-recycling-taskmaster
    "hunchentoot-recycling-taskmaster-atomic-taskmaster"
+   :hunchentoot-atomic-op-taskmaster
    :initial-thread-count threads-list
    *hunchentoot-recycling-taskmaster-default-thread-count*))
 
@@ -104,6 +113,7 @@
    'hunchentoot:easy-acceptor
    'cl-tbnl-gserver-tmgr.tmgr:gserver-tmgr
    "cl-tbnl-gserver-tmgr"
+   :cl-tbnl-gserver-tmgr
    :max-thread-count threads-list
    *cl-tbnl-gserver-tmgr-default-thread-count*))
 
@@ -112,4 +122,5 @@
 (defun bench-quux-hunchentoot ()
   (bench-hunchentoot-using-class 'hunchentoot:easy-acceptor
                                  'quux-hunchentoot:thread-pooling-taskmaster
-                                 "quux-hunchentoot.log"))
+                                 "quux-hunchentoot.log"
+                                 :quux-hunchentoot))

@@ -21,12 +21,34 @@
 
 (defvar *output-directory* (generate-output-directory-path))
 
-(defun run-wrk (host filename &key (duration *wrk-duration*))
+(defun write-system-info (stream)
+  (let ((system-symbols
+          '(lisp-implementation-type
+            lisp-implementation-version
+            machine-type
+            machine-version
+            software-type
+            software-version)))
+    (loop for name in system-symbols
+          as value = (funcall name)
+          collect (list name value) into data
+          maximize (length (symbol-name name)) into max-name-len 
+          maximize (length value) into max-value-len
+          finally
+             (loop for (k v) in data
+                   do (format stream "~vA	~vA~%"
+                              max-name-len k max-value-len v)))))
+
+(defun run-wrk (host filename asdf-system-name &key (duration *wrk-duration*))
   (ensure-directories-exist *output-directory*)
   (with-open-file (*standard-output* (merge-pathnames filename *output-directory*) 
                                      :direction :output :if-exists :rename)
-    (format t "~A ~A ~A~2%"
-            filename  (lisp-implementation-type) (lisp-implementation-version))
+    (format t "~A~%" filename)
+    (format t "~&~A~C~A~2%"
+            asdf-system-name #\tab
+            (asdf:component-version (asdf:find-system asdf-system-name)))
+    (write-system-info *standard-output*)
+    (terpri)
     (finish-output)
     (flet ((run-tcd (thread connection keep-alive)
              (let ((options (list "-t" (princ-to-string thread)

@@ -15,6 +15,6 @@
            :name "House server thread")))
     (wait-for-starting-server)
     (unwind-protect
-         (run-wrk "http://localhost:4040/hello-world" "house_default.log")
+         (run-wrk "http://localhost:4040/hello-world" "house_default.log" :house)
       (bt:destroy-thread server-thread))
     server-thread))

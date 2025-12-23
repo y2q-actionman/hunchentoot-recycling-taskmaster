@@ -20,7 +20,7 @@
     collect server-thread
     do (wait-for-starting-server)
        (unwind-protect
-            (run-wrk "http://localhost:5000" logname)
+            (run-wrk "http://localhost:5000" logname :woo)
          (bt:destroy-thread server-thread))))
 
 (defparameter *woo-callback-app*
@@ -45,7 +45,7 @@
     collect server-thread
     do (wait-for-starting-server)
        (unwind-protect
-            (run-wrk "http://localhost:5000" logname)
+            (run-wrk "http://localhost:5000" logname :woo)
          (bt:destroy-thread server-thread))))
 
 

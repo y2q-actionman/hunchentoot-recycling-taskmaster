@@ -1,23 +1,5 @@
 (in-package :hunchentoot-recycling-taskmaster-benchmark)
 
-(defun write-system-info-file (stream)
-  (let ((system-symbols
-          '(lisp-implementation-type
-            lisp-implementation-version
-            machine-type
-            machine-version
-            software-type
-            software-version)))
-    (loop for name in system-symbols
-          as value = (funcall name)
-          collect (list name value) into data
-          maximize (length (symbol-name name)) into max-name-len 
-          maximize (length value) into max-value-len
-          finally
-             (loop for (k v) in data
-                   do (format stream "~vA	~vA~%"
-                              max-name-len k max-value-len v)))))
-
 (defun prepare (&key (output-directory (generate-output-directory-path))
                   (system-info-filename *system-info-filename*))
   (setf *output-directory* output-directory)
