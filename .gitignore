@@ -18,3 +18,5 @@
 
 *.log
 *.bak*
+
+benchmark/*T*
