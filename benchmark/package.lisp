@@ -3,4 +3,10 @@
 (defpackage #:hunchentoot-recycling-taskmaster-benchmark
   (:use :cl)
   (:export #:prepare
-           #:run))
+           #:run
+           ;; Test parameters
+           #:*wrk-duration*
+           #:*wrk-threads-and-connections*
+           #:*test-keep-alive*
+           #:*test-no-keep-alive*
+           #:*handler-sleep-seconds*))

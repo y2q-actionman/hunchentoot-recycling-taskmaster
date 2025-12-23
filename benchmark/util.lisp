@@ -27,7 +27,7 @@
 
 (defparameter *handler-sleep-seconds* 0.001) ; 1ms
 
-(defparameter *system-info-filename* "system-info.txt"
+(defvar *system-info-filename* "system-info.txt"
   "made by `prepare'")
 
 (defun write-system-info (stream)
