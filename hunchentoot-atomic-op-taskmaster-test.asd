@@ -2,6 +2,7 @@
   :description "Tests for hunchentoot-atomic-op-taskmaster"
   :license "BSD 2-Clause"
   :author "Yokota Yuki"
+  :version "0.0.1"
   :depends-on (#:hunchentoot-atomic-op-taskmaster
                #:1am
                #:hunchentoot-recycling-taskmaster-test)

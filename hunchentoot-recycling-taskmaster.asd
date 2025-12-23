@@ -2,6 +2,7 @@
   :description "An experiment to improve multithreading performance of Hunchentoot without any additional dependencies."
   :license "BSD 2-Clause"               ; follows hunchentoot.
   :author "Yokota Yuki"
+  :version "0.0.1"
   :depends-on (#:hunchentoot)
   :pathname #.(make-pathname :directory '(:relative "recycling-taskmaster"))
   :serial t

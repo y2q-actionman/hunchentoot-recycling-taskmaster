@@ -2,6 +2,7 @@
   :description "Benchmarks for hunchentoot-recycling-taskmaster and other Lisp web servers."
   :license "BSD 2-Clause"               ; follows hunchentoot.
   :author "Yokota Yuki"
+  :version "0.0.1"
   :depends-on
   (;; Hunchentoot family
    #:hunchentoot
