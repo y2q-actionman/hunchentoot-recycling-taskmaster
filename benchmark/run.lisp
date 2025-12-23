@@ -19,11 +19,11 @@
     ;; (bench-hunchentoot-atomic-taskmaster)
     ;; (bench-hunchentoot-atomic-acceptor)
     (bench-hunchentoot-atomic-all)
-    (bench-hunchentoot-recycling-taskmaster (list 8 *nproc*))
-    ;; (bench-hunchentoot-recycling-taskmaster-atomic-all (list 8 *nproc*))
-    ;; (bench-hunchentoot-recycling-taskmaster-atomic-acceptor (list 8 *nproc*))
-    (bench-hunchentoot-recycling-taskmaster-atomic-taskmaster (list 8 *nproc*))
-    (bench-cl-tbnl-gserver-tmgr (list 8 *nproc*))
+    (bench-hunchentoot-recycling-taskmaster (list 8 +nproc+))
+    ;; (bench-hunchentoot-recycling-taskmaster-atomic-all (list 8 +nproc+))
+    ;; (bench-hunchentoot-recycling-taskmaster-atomic-acceptor (list 8 +nproc+))
+    (bench-hunchentoot-recycling-taskmaster-atomic-taskmaster (list 8 +nproc+))
+    (bench-cl-tbnl-gserver-tmgr (list 8 +nproc+))
     (bench-quux-hunchentoot)
 
     ;; (bench-house) ; broken
@@ -32,6 +32,6 @@
     (progn
       ;; (bench-conserv) ; I don't know how to use.
       (bench-wookie)
-      (bench-woo (list nil 8 *nproc*))
-      ;; (bench-woo-callback (list nil 8 *nproc*))
+      (bench-woo (list nil 8 +nproc+))
+      ;; (bench-woo-callback (list nil 8 +nproc+))
       )))

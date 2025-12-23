@@ -6,7 +6,7 @@
             (uiop:run-program "nproc" :output t))))
     (parse-integer nproc-str)))
 
-(defparameter *nproc* (nproc))
+(defconstant +nproc+ (nproc))
 
 (defparameter *wrk-duration* 10)
 (defparameter *wrk-threads-and-connections*
