@@ -4,9 +4,11 @@
                   (system-info-filename *system-info-filename*))
   (setf *output-directory* output-directory)
   (ensure-directories-exist *output-directory*)
-  (with-open-file (stream (merge-pathnames system-info-filename *output-directory*) 
-                          :direction :output :if-exists :rename)
-    (write-system-info stream)))
+  (let ((system-info-file-path (merge-pathnames system-info-filename *output-directory*)))
+    (with-open-file (stream system-info-file-path
+                            :direction :output :if-exists :rename)
+      (write-system-info stream))
+    system-info-file-path))
 
 ;;; for repl
 (trace run-wrk)
@@ -38,4 +40,5 @@
         ret)
       (bench-woo)
       ;; (bench-woo-callback)
-      )))
+      ))
+  t)
