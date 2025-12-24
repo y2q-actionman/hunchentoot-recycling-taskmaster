@@ -12,7 +12,7 @@
     :reader recycling-taskmaster-acceptor-process-lock
     :documentation "A lock for protecting acceptor-process slot.")
    (busy-thread-count-cell
-    :initform 0
+    :initform (bt2:make-atomic-integer)
     :accessor recycling-taskmaster-busy-thread-count-cell
     :documentation
     "The number of threads busy on a client socket.")
@@ -153,7 +153,7 @@ Thread states:
 (defmethod count-busy-thread (taskmaster)
   "Estimates how many threads are on client connections."
   (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
-    (recycling-taskmaster-busy-thread-count-cell taskmaster)))
+    (bt2:atomic-integer-value (recycling-taskmaster-busy-thread-count-cell taskmaster))))
 
 (defmethod hunchentoot:handle-incoming-connection ((taskmaster recycling-taskmaster) client-connection)
   "This function is the core of `recycling-taskmaster'. It is called
@@ -161,12 +161,13 @@ Thread states:
  accept(2). It processes a client-connection by itself and/or controls
  how many threads working around the process. "
   (usocket:with-connected-socket (client-connection client-connection)
-    (let ((lock (recycling-taskmaster-acceptor-process-lock taskmaster)))
+    (let ((lock (recycling-taskmaster-acceptor-process-lock taskmaster))
+          (decremented-p nil))
       (unwind-protect
            (let (all-threads busy-threads)
              (hunchentoot::with-lock-held (lock)
-               (setf all-threads (count-recycling-taskmaster-thread taskmaster :lock nil)
-                     busy-threads (incf (recycling-taskmaster-busy-thread-count-cell taskmaster))))
+               (setf busy-threads (bt2:atomic-integer-incf (recycling-taskmaster-busy-thread-count-cell taskmaster))
+                     all-threads (count-recycling-taskmaster-thread taskmaster :lock nil)))
              (let ((accepting-threads (- all-threads busy-threads)))
                (when (<= accepting-threads 0)
                  ;; NOTE:
@@ -188,18 +189,19 @@ Thread states:
              ;; To determine whether a thread is recyclied or not,
              ;; how many threads seem to wait on the listen socket.
              (hunchentoot::with-lock-held (lock)
-               (setf all-threads (count-recycling-taskmaster-thread taskmaster :lock nil)
-                     busy-threads (recycling-taskmaster-busy-thread-count-cell taskmaster)))
+               (setf busy-threads (bt2:atomic-integer-decf (recycling-taskmaster-busy-thread-count-cell taskmaster))
+                     all-threads (count-recycling-taskmaster-thread taskmaster :lock nil)))
+             (setf decremented-p t)
              (when (and
                     ;; There are enough other threads.
                     (< (recycling-taskmaster-initial-thread-count taskmaster)
                        all-threads)
                     ;; and someone is waiting -- means no pending connections.
                     (let ((accepting-threads (- all-threads busy-threads)))
-                      (> accepting-threads 0)))
+                      (> accepting-threads (if decremented-p 1 0))))
                (error 'end-of-parallel-acceptor-thread)))
-        (hunchentoot::with-lock-held (lock)
-          (decf (recycling-taskmaster-busy-thread-count-cell taskmaster)))))))
+        (unless decremented-p
+          (bt2:atomic-integer-decf (recycling-taskmaster-busy-thread-count-cell taskmaster)))))))
 
 (defmethod hunchentoot:create-request-handler-thread ((taskmaster recycling-taskmaster) client-connection)
   "This method is never called for `recycling-taskmaster'. See
