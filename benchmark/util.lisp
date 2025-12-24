@@ -6,8 +6,6 @@
             (uiop:run-program "nproc" :output t))))
     (parse-integer nproc-str)))
 
-(defconstant +nproc+ (nproc))
-
 (defparameter *wrk-duration* 10)
 (defparameter *wrk-threads-and-connections*
   '((4 100) (4 10) (16 400))
@@ -49,35 +47,49 @@
                               max-name-len k max-value-len v)))
     (format stream "~&*handler-sleep-seconds*~C~F~%" #\tab *handler-sleep-seconds*)))
 
-(defun run-wrk (host filename asdf-system-name &key (duration *wrk-duration*))
+(defun run-wrk (host filename asdf-system-name
+                &key (duration *wrk-duration*) (test-keep-alive *test-keep-alive*) (test-no-keep-alive *test-no-keep-alive*))
   (ensure-directories-exist *output-directory*)
-  (with-open-file (*standard-output* (merge-pathnames filename *output-directory*) 
-                                     :direction :output :if-exists :rename)
-    (format t "~A~%" filename)
-    (format t "~&~A~C~A~2%"
-            asdf-system-name #\tab
-            (asdf:component-version (asdf:find-system asdf-system-name)))
-    (write-system-info *standard-output*)
-    (terpri)
-    (finish-output)
-    (flet ((run-tcd (thread connection keep-alive)
-             (let ((options (list "-t" (princ-to-string thread)
-                                  "-c" (princ-to-string connection)
-                                  "-d" (princ-to-string duration)
-                                  host)))
-               (unless keep-alive
-                 (push "Connection: close" options)
-                 (push "-H" options))
-               (format t "# ~{~A ~^~}~%" options)
-               (finish-output)
-               (uiop:run-program (list* "wrk" options) :output t))
-             (terpri)
-             (finish-output)))
-      (loop for (threads connections) in *wrk-threads-and-connections*
-            if *test-keep-alive*
-              do (run-tcd threads connections t)
-            if *test-no-keep-alive*
-              do (run-tcd threads connections nil)))))
+  (labels
+      ((write-heading ()
+         (format t "~A~%" filename)
+         (format t "~&~A~C~A~2%"
+                 asdf-system-name #\tab
+                 (asdf:component-version (asdf:find-system asdf-system-name)))
+         (write-system-info *standard-output*)
+         (terpri)
+         (finish-output))
+       (run-wrk-with-arguments (thread connection keep-alive)
+         (let ((options (list "-t" (princ-to-string thread)
+                              "-c" (princ-to-string connection)
+                              "-d" (princ-to-string duration)
+                              host)))
+           (unless keep-alive
+             (push "Connection: close" options)
+             (push "-H" options))
+           (format t "# ~{~A ~^~}~%" options)
+           (finish-output)
+           (uiop:run-program (list* "wrk" options) :output t))
+         (terpri)
+         (finish-output))
+       (run-wrk-loop (keep-alive-p)
+         (loop for (threads connections) in *wrk-threads-and-connections*
+               do (run-wrk-with-arguments threads connections keep-alive-p)))
+       (make-output-file-path (keep-alive-p &aux (dirname (if keep-alive-p "keep-alive" "no-keep-alive")))
+         (let ((dir (merge-pathnames (make-pathname :directory (list :relative dirname))
+                                     *output-directory*)))
+           (ensure-directories-exist dir)
+           (merge-pathnames filename dir))))
+    (when test-keep-alive
+      (with-open-file (*standard-output* (make-output-file-path t) 
+                                         :direction :output :if-exists :rename)
+        (write-heading)
+        (run-wrk-loop t)))
+    (when test-no-keep-alive
+      (with-open-file (*standard-output* (make-output-file-path nil) 
+                                         :direction :output :if-exists :rename)
+        (write-heading)
+        (run-wrk-loop nil)))))
 
 (defun handler-small-sleep ()
   (when (plusp *handler-sleep-seconds*)

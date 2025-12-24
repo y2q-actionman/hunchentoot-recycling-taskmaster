@@ -22,7 +22,8 @@
 
 ;;; hunchentoot-recycling-taskmaster + atomic-op
 
-(defun bench-hunchentoot-recycling-taskmaster-atomic-all (&optional (threads-list '(8)))
+(defun bench-hunchentoot-recycling-taskmaster-atomic-all
+    (&optional (threads-list (list *hunchentoot-recycling-taskmaster-default-thread-count*)))
   (bench-hunchentoot-family-per-threads
    'hunchentoot-atomic-op-taskmaster:atomic-parallel-easy-acceptor
    'hunchentoot-atomic-op-taskmaster:atomic-recycling-taskmaster
@@ -31,7 +32,8 @@
    :initial-thread-count threads-list
    *hunchentoot-recycling-taskmaster-default-thread-count*))
 
-(defun bench-hunchentoot-recycling-taskmaster-atomic-acceptor (&optional (threads-list '(8)))
+(defun bench-hunchentoot-recycling-taskmaster-atomic-acceptor
+    (&optional (threads-list (list *hunchentoot-recycling-taskmaster-default-thread-count*)))
   (bench-hunchentoot-family-per-threads
    'hunchentoot-atomic-op-taskmaster:atomic-parallel-easy-acceptor
    'hunchentoot-recycling-taskmaster:recycling-taskmaster
@@ -40,7 +42,8 @@
    :initial-thread-count threads-list
    *hunchentoot-recycling-taskmaster-default-thread-count*))
 
-(defun bench-hunchentoot-recycling-taskmaster-atomic-taskmaster (&optional (threads-list '(8)))
+(defun bench-hunchentoot-recycling-taskmaster-atomic-taskmaster
+    (&optional (threads-list (list *hunchentoot-recycling-taskmaster-default-thread-count*)))
   (bench-hunchentoot-family-per-threads
    'hunchentoot-recycling-taskmaster:parallel-easy-acceptor
    'hunchentoot-atomic-op-taskmaster:atomic-recycling-taskmaster

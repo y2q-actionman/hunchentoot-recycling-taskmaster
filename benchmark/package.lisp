@@ -4,7 +4,7 @@
   (:use :cl)
   (:export #:prepare
            #:run
-           #:+nproc+
+           #:nproc
            ;; Test parameters
            #:*wrk-duration*
            #:*wrk-threads-and-connections*

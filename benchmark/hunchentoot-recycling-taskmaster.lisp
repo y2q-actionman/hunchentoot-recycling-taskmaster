@@ -18,7 +18,8 @@
     (bench-hunchentoot-using-class acceptor-class taskmaster-class logname asdf-system-name
                                    :taskmaster-args (list taskmaster-thread-argname threads))))
 
-(defun bench-hunchentoot-recycling-taskmaster (&optional (threads-list '(8)))
+(defun bench-hunchentoot-recycling-taskmaster
+    (&optional (threads-list (list *hunchentoot-recycling-taskmaster-default-thread-count*)))
   (bench-hunchentoot-family-per-threads
    'hunchentoot-recycling-taskmaster:parallel-easy-acceptor
    'hunchentoot-recycling-taskmaster:recycling-taskmaster

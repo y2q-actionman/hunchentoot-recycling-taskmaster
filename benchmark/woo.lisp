@@ -2,7 +2,10 @@
 
 ;;; Woo
 
-(defun bench-woo (&optional (threads-list '(nil)))
+(defparameter *woo-threads* 8
+  "default is 8 because cl-tbnl-gserver-tmgr is so.")
+
+(defun bench-woo (&optional (threads-list (list nil *woo-threads*)))
   (loop
     for threads in threads-list
     as logname = (format nil "woo_threads-~D~@[-default~*~].log"
@@ -20,7 +23,8 @@
     collect server-thread
     do (wait-for-starting-server)
        (unwind-protect
-            (run-wrk "http://localhost:5000" logname :woo)
+            (run-wrk "http://localhost:5000" logname :woo
+                     :test-no-keep-alive nil)
          (bt:destroy-thread server-thread))))
 
 (defparameter *woo-callback-app*
@@ -31,7 +35,7 @@
       (handler-small-sleep)
       (funcall callback '(200 (:content-type "text/plain") ("Hello, World"))))))
 
-(defun bench-woo-callback (&optional (threads-list '(nil)))
+(defun bench-woo-callback (&optional (threads-list (list nil *woo-threads*)))
   (loop
     for threads in threads-list
     as logname = (format nil "woo-callback_threads-~D~@[-default~*~].log"
@@ -45,7 +49,8 @@
     collect server-thread
     do (wait-for-starting-server)
        (unwind-protect
-            (run-wrk "http://localhost:5000" logname :woo)
+            (run-wrk "http://localhost:5000" logname :woo
+                     :test-no-keep-alive nil)
          (bt:destroy-thread server-thread))))
 
 

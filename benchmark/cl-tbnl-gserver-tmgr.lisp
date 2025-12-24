@@ -5,7 +5,8 @@
 (defparameter *cl-tbnl-gserver-tmgr-default-thread-count*
   cl-tbnl-gserver-tmgr.tmgr::*gserver-tmgr-poolsize*)
 
-(defun bench-cl-tbnl-gserver-tmgr (&optional (threads-list '(8)))
+(defun bench-cl-tbnl-gserver-tmgr
+    (&optional (threads-list (list *cl-tbnl-gserver-tmgr-default-thread-count*)))
   (bench-hunchentoot-family-per-threads
    'hunchentoot:easy-acceptor
    'cl-tbnl-gserver-tmgr.tmgr:gserver-tmgr
