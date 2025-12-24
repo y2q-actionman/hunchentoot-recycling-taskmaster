@@ -16,6 +16,14 @@
     :accessor recycling-taskmaster-busy-thread-count-cell
     :documentation
     "The number of threads busy on a client socket.")
+   (thread-maker-process
+    :initform nil
+    :accessor recycling-taskmaster-thread-maker-process
+    :documentation "serializing `bt:make-thread'")
+   (thread-maker-requests
+    :initform (bt:make-semaphore)
+    :accessor recycling-taskmaster-thread-maker-requests
+    :documentation "how many threads should be created")
    (initial-thread-count
     :type integer
     :initarg :initial-thread-count
@@ -139,6 +147,26 @@ Thread states:
          (thread (hunchentoot:start-thread taskmaster thunk :name name)))
     (add-recycling-taskmaster-thread taskmaster thread)))
 
+(defun thread-maker-loop (taskmaster
+                          &aux (acceptor (hunchentoot:taskmaster-acceptor taskmaster)))
+  (loop
+    (unless (bt:wait-on-semaphore (recycling-taskmaster-thread-maker-requests taskmaster))
+      (return))
+    (hunchentoot::with-lock-held ((hunchentoot::acceptor-shutdown-lock acceptor))
+      (when (hunchentoot::acceptor-shutdown-p acceptor)
+        (return)))
+    (make-parallel-acceptor-thread taskmaster)))
+
+(defmethod request-making-thread (taskmaster &key (count 1))
+  (bt:signal-semaphore (recycling-taskmaster-thread-maker-requests taskmaster)
+                       :count count))
+
+(defmethod start-thread-maker-thread (taskmaster)
+  (setf (recycling-taskmaster-thread-maker-process taskmaster)
+        (hunchentoot:start-thread taskmaster
+                                  (lambda () (thread-maker-loop taskmaster))
+                                  :name "thread-maker")))
+
 (defmethod hunchentoot:execute-acceptor :before ((taskmaster recycling-taskmaster))
   "Checks the type of ACCEPTOR slot, because recycling-taskmaster needs
  a crafted `hunchentoot:accept-connections' not using `usocket:with-server-socket'."
@@ -147,6 +175,9 @@ Thread states:
 
 (defmethod hunchentoot:execute-acceptor ((taskmaster recycling-taskmaster))
   "Make initial threads working on `parallel-acceptor'."
+  (start-thread-maker-thread taskmaster)
+  (request-making-thread taskmaster :count (recycling-taskmaster-initial-thread-count taskmaster))
+  #+ ()
   (loop repeat (recycling-taskmaster-initial-thread-count taskmaster)
         do (make-parallel-acceptor-thread taskmaster)))
 
@@ -180,7 +211,9 @@ Thread states:
                  ;; calculate "(- +how-many-threads-waiting-on-the-listen-socket+
                  ;; accepting-threads)". However I could not get remarkable
                  ;; performance gains. So I decided to fix it to '1'.
-                 (make-parallel-acceptor-thread taskmaster)))
+                 (request-making-thread taskmaster)
+                 ;; (make-parallel-acceptor-thread taskmaster)
+                 ))
              ;; process the connection by itself.
              (hunchentoot::handle-incoming-connection%
               taskmaster
@@ -280,6 +313,8 @@ Thread states:
        (hunchentoot::with-lock-held ((hunchentoot::acceptor-shutdown-lock acceptor))
          (assert (hunchentoot::acceptor-shutdown-p acceptor)
                  () "acceptor-shutdown-p should be true"))
+       (request-making-thread taskmaster)
+       (bt:join-thread (recycling-taskmaster-thread-maker-process taskmaster))
     
     with acceptor = (hunchentoot:taskmaster-acceptor taskmaster)
     with listen-socket = (hunchentoot::acceptor-listen-socket acceptor)

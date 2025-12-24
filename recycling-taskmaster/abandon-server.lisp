@@ -15,6 +15,7 @@
 (defmethod abandon-taskmaster ((taskmaster recycling-taskmaster) &key (lock t))
   "Abandon all threads kept in TASKMASTER. This is a last resort
  for handling corrupted taskmaster objects."
+  (request-making-thread taskmaster)    ; will stop thread-maker.
   (let ((thread-list
           (flet ((steal-threads ()
                    (prog1 (hash-table-keys (hunchentoot::acceptor-process taskmaster))
