@@ -30,9 +30,11 @@
       ;; `end-of-parallel-acceptor-thread'.
       (typecase thread
         (bt2:thread
-         (bt2:signal-in-thread thread 'end-of-parallel-acceptor-thread))
+         (when (bt2:thread-alive-p thread)
+           (bt2:signal-in-thread thread 'end-of-parallel-acceptor-thread)))
         (otherwise                      ; bt1 thread object.
-         (bt:interrupt-thread thread (lambda () (signal 'end-of-parallel-acceptor-thread))))))
+         (when (bt:thread-alive-p thread)
+           (bt:interrupt-thread thread (lambda () (signal 'end-of-parallel-acceptor-thread)))))))
     (dolist (thread thread-list)
       (typecase thread
         (bt2:thread
