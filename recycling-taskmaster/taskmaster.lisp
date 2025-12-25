@@ -1,6 +1,6 @@
 (in-package #:hunchentoot-recycling-taskmaster)
 
-(defvar *default-standby-thread-count* 4)
+(defvar *default-standby-thread-count* 8)
 
 (defclass recycling-taskmaster (hunchentoot:one-thread-per-connection-taskmaster)
   ((hunchentoot::acceptor-process       ; overwrites
