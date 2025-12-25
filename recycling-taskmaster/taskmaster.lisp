@@ -1,6 +1,6 @@
 (in-package #:hunchentoot-recycling-taskmaster)
 
-(defvar *default-initial-thread-count* 4)
+(defvar *default-standby-thread-count* 4)
 
 (defclass recycling-taskmaster (hunchentoot:one-thread-per-connection-taskmaster)
   ((hunchentoot::acceptor-process       ; overwrites
@@ -24,13 +24,13 @@
     :initform (bt:make-semaphore)
     :accessor recycling-taskmaster-thread-maker-requests
     :documentation "how many threads should be created")
-   (initial-thread-count
+   (standby-thread-count
     :type integer
-    :initarg :initial-thread-count
-    :initform *default-initial-thread-count*
-    :accessor recycling-taskmaster-initial-thread-count
+    :initarg :standby-thread-count
+    :initform *default-standby-thread-count*
+    :accessor recycling-taskmaster-standby-thread-count
     :documentation 
-    "The number of how many threads created at first or off-peak."))
+    "The number of how many threads kept on the listen socket."))
   (:documentation "A taskmaster works like
 `hunchentoot:one-thread-per-connection-taskmaster' except recycling
 threads when there is a pending connecton.
@@ -42,7 +42,7 @@ Thread counter summary:
 
 - The count of all threads is computed by
   `count-recycling-taskmaster-thread'.
-  Its lower bound is in `INITIAL-THREAD-COUNT' slot.
+  Its lower bound is in `STANDBY-THREAD-COUNT' slot.
 
 - `busy-thread-count-cell' counts threads working on a connected
   socket.
@@ -76,20 +76,20 @@ Thread states:
 
 
 (defmethod cl:initialize-instance :after ((taskmaster recycling-taskmaster) &rest init-args)
-  "If INITIAL-THREAD-COUNT is supplied, ensure it is equal or less than other count parameters."
+  "If STANDBY-THREAD-COUNT is supplied, ensure it is equal or less than other count parameters."
   (declare (ignore init-args))
-  (with-accessors ((initial recycling-taskmaster-initial-thread-count)
+  (with-accessors ((standby recycling-taskmaster-standby-thread-count)
                    (max-thread-count hunchentoot:taskmaster-max-thread-count)
                    (max-accept-count hunchentoot:taskmaster-max-accept-count))
       taskmaster
-    (unless (typep initial 'integer)
-      (hunchentoot:parameter-error "INITIAL-THREAD-COUNT must be an integer."))
+    (unless (typep standby 'integer)
+      (hunchentoot:parameter-error "STANDBY-THREAD-COUNT must be an integer."))
     (when (and max-thread-count
-               (not (<= initial max-thread-count)))
-      (hunchentoot:parameter-error "INITIAL-THREAD-COUNT must be equal or less than MAX-THREAD-COUNT"))
+               (not (<= standby max-thread-count)))
+      (hunchentoot:parameter-error "STANDBY-THREAD-COUNT must be equal or less than MAX-THREAD-COUNT"))
     (when (and max-accept-count
-               (not (<= initial max-accept-count)))
-      (hunchentoot:parameter-error "INITIAL-THREAD-COUNT must be equal or less than MAX-ACCEPT-COUNT"))))
+               (not (<= standby max-accept-count)))
+      (hunchentoot:parameter-error "STANDBY-THREAD-COUNT must be equal or less than MAX-ACCEPT-COUNT"))))
 
 (defmethod add-recycling-taskmaster-thread (taskmaster thread)
   (hunchentoot::with-lock-held ((recycling-taskmaster-acceptor-process-lock taskmaster))
@@ -176,10 +176,7 @@ Thread states:
 (defmethod hunchentoot:execute-acceptor ((taskmaster recycling-taskmaster))
   "Make initial threads working on `parallel-acceptor'."
   (start-thread-maker-thread taskmaster)
-  (request-making-thread taskmaster :count (recycling-taskmaster-initial-thread-count taskmaster))
-  #+ ()
-  (loop repeat (recycling-taskmaster-initial-thread-count taskmaster)
-        do (make-parallel-acceptor-thread taskmaster)))
+  (request-making-thread taskmaster :count (recycling-taskmaster-standby-thread-count taskmaster)))
 
 (defmethod count-busy-thread (taskmaster)
   "Estimates how many threads are on client connections."
@@ -211,9 +208,14 @@ Thread states:
                  ;; calculate "(- +how-many-threads-waiting-on-the-listen-socket+
                  ;; accepting-threads)". However I could not get remarkable
                  ;; performance gains. So I decided to fix it to '1'.
-                 (request-making-thread taskmaster)
-                 ;; (make-parallel-acceptor-thread taskmaster)
-                 ))
+                 ;; NOTE:
+                 ;; In old code, I directly made threads here by
+                 ;; `make-parallel-acceptor-thread'.  However I found
+                 ;; many threads stucked in "Make-thread mutex" of
+                 ;; SBCL, especially no-keep-alive and 1ms latency
+                 ;; case.  So I added a 'thread-making' thread for
+                 ;; serializing that process.
+                 (request-making-thread taskmaster)))
              ;; process the connection by itself.
              (hunchentoot::handle-incoming-connection%
               taskmaster
@@ -225,14 +227,9 @@ Thread states:
                (setf busy-threads (bt2:atomic-integer-decf (recycling-taskmaster-busy-thread-count-cell taskmaster))
                      all-threads (count-recycling-taskmaster-thread taskmaster :lock nil)))
              (setf decremented-p t)
-             (when (and
-                    ;; There are enough other threads.
-                    (< (recycling-taskmaster-initial-thread-count taskmaster)
-                       all-threads)
-                    ;; and someone is waiting -- means no pending connections.
-                    (let ((accepting-threads (- all-threads busy-threads)))
-                      (> accepting-threads (if decremented-p 1 0))))
-               (error 'end-of-parallel-acceptor-thread)))
+             (let ((accepting-threads (- all-threads busy-threads (if decremented-p 1 0))))
+               (when (> accepting-threads (recycling-taskmaster-standby-thread-count taskmaster))
+                 (error 'end-of-parallel-acceptor-thread))))
         (unless decremented-p
           (bt2:atomic-integer-decf (recycling-taskmaster-busy-thread-count-cell taskmaster)))))))
 

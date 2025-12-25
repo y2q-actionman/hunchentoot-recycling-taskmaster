@@ -64,13 +64,13 @@
 
 ;;; Server class definitions for debugging.
 
-(defparameter *debug-server-initial-thread* 2)
+(defparameter *debug-server-standby-thread* 2)
 (defparameter *debug-server-port* 62532)
 
 (defclass recycling-taskmaster-debug (hunchentoot-recycling-taskmaster:recycling-taskmaster)
   ()
   (:default-initargs
-   :initial-thread-count *debug-server-initial-thread*))
+   :standby-thread-count *debug-server-standby-thread*))
 
 (defmethod hunchentoot:handle-incoming-connection :before ((taskmaster recycling-taskmaster-debug) client-connection)
   (declare (ignore client-connection))

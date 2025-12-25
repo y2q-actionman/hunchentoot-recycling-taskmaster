@@ -3,7 +3,7 @@
 ;;; hunchentoot-recycling-taskmaster
 
 (defparameter *hunchentoot-recycling-taskmaster-default-thread-count*
-  hunchentoot-recycling-taskmaster::*default-initial-thread-count*)
+  hunchentoot-recycling-taskmaster::*default-standby-thread-count*)
 
 (defun bench-hunchentoot-family-per-threads (acceptor-class taskmaster-class logname-prefix
                                              asdf-system-name
@@ -25,5 +25,5 @@
    'hunchentoot-recycling-taskmaster:recycling-taskmaster
    "hunchentoot-recycling-taskmaster"
    :hunchentoot-recycling-taskmaster
-   :initial-thread-count threads-list
+   :standby-thread-count threads-list
    *hunchentoot-recycling-taskmaster-default-thread-count*))

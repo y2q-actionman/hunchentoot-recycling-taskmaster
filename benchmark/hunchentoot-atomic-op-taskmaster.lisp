@@ -29,7 +29,7 @@
    'hunchentoot-atomic-op-taskmaster:atomic-recycling-taskmaster
    "hunchentoot-recycling-taskmaster-atomic-all"
    :hunchentoot-atomic-op-taskmaster
-   :initial-thread-count threads-list
+   :standby-thread-count threads-list
    *hunchentoot-recycling-taskmaster-default-thread-count*))
 
 (defun bench-hunchentoot-recycling-taskmaster-atomic-acceptor
@@ -39,7 +39,7 @@
    'hunchentoot-recycling-taskmaster:recycling-taskmaster
    "hunchentoot-recycling-taskmaster-atomic-acceptor"
    :hunchentoot-atomic-op-taskmaster
-   :initial-thread-count threads-list
+   :standby-thread-count threads-list
    *hunchentoot-recycling-taskmaster-default-thread-count*))
 
 (defun bench-hunchentoot-recycling-taskmaster-atomic-taskmaster
@@ -49,5 +49,5 @@
    'hunchentoot-atomic-op-taskmaster:atomic-recycling-taskmaster
    "hunchentoot-recycling-taskmaster-atomic-taskmaster"
    :hunchentoot-atomic-op-taskmaster
-   :initial-thread-count threads-list
+   :standby-thread-count threads-list
    *hunchentoot-recycling-taskmaster-default-thread-count*))
