@@ -78,11 +78,11 @@ See [[file:demo.lisp][demo.lisp]] for examples above.
 
 * How it works
 
-[[file:pics/hunchentoot-architecture.dot.png][hunchentoot arthitecture]]
+[[file:pics/hunchentoot-architecture.dot.png]]
 
-[[file:pics/hunchentoot-thread-pooling.dot.png][hunchentoot thread-pooling arthitecture]]
+[[file:pics/hunchentoot-thread-pooling.dot.png]]
 
-[[file:pics/hunchentoot-recycling-taskmaster-architecture.dot.png][hunchentoot-recycling-taskmaster arthitecture]]
+[[file:pics/hunchentoot-recycling-taskmaster-architecture.dot.png]]
 
 * Benchmarking
 
