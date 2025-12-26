@@ -53,7 +53,8 @@ Please download it by yourself.
 ** Starting/stopping server
 
 You can use hunchentoot-recycling-taskmaster just by changing
-=hunchentoot:acceptor= to =hunchentoot-recycling-taskmaster:parallel-easy-acceptor=.
+=hunchentoot:acceptor= to =hunchentoot-recycling-taskmaster:parallel-acceptor=, or
+=hunchentoot:easy-acceptor= to =hunchentoot-recycling-taskmaster:parallel-easy-acceptor=.
 
 #+begin_src common-lisp
   (defparameter *test-server*
@@ -73,7 +74,7 @@ For stopping, =hunchentoot:stop= can be used.
   (hunchentoot:stop *test-server*)
 #+end_src
 
-See "demo.lisp".
+See [[demo.lisp][demo.lisp]] for examples above.
 
 * Benchmarking
 
