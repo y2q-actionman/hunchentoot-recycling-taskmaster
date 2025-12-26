@@ -1,0 +1,41 @@
+quux-hunchentoot.log
+QUUX-HUNCHENTOOT	1.0.2
+
+LISP-IMPLEMENTATION-TYPE   	SBCL                               
+LISP-IMPLEMENTATION-VERSION	2.2.9.debian                       
+MACHINE-TYPE               	X86-64                             
+MACHINE-VERSION            	13th Gen Intel(R) Core(TM) i7-1360P
+SOFTWARE-TYPE              	Linux                              
+SOFTWARE-VERSION           	5.15.153.1-microsoft-standard-WSL2 
+*handler-sleep-seconds*	0.0
+
+# -H Connection: close -t 4 -c 100 -d 10 http://localhost:4242/yo 
+Running 10s test @ http://localhost:4242/yo
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    36.09ms   23.75ms 344.45ms   78.51%
+    Req/Sec   392.99    166.63     1.40k    68.57%
+  15554 requests in 10.05s, 2.46MB read
+Requests/sec:   1547.45
+Transfer/sec:    250.86KB
+
+# -H Connection: close -t 4 -c 10 -d 10 http://localhost:4242/yo 
+Running 10s test @ http://localhost:4242/yo
+  4 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     5.74ms    3.73ms  31.00ms   67.51%
+    Req/Sec   339.46     50.41   555.00     67.42%
+  13582 requests in 10.08s, 2.15MB read
+Requests/sec:   1347.44
+Transfer/sec:    218.43KB
+
+# -H Connection: close -t 16 -c 400 -d 10 http://localhost:4242/yo 
+Running 10s test @ http://localhost:4242/yo
+  16 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    43.04ms   55.70ms 880.01ms   96.03%
+    Req/Sec   122.39     99.71     1.21k    79.61%
+  17333 requests in 10.10s, 2.74MB read
+Requests/sec:   1716.26
+Transfer/sec:    278.22KB
+

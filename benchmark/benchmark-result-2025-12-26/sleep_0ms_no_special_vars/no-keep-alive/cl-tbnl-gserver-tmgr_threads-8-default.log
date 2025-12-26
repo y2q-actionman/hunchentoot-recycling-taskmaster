@@ -1,0 +1,42 @@
+cl-tbnl-gserver-tmgr_threads-8-default.log
+CL-TBNL-GSERVER-TMGR	0.1.1
+
+LISP-IMPLEMENTATION-TYPE   	SBCL                               
+LISP-IMPLEMENTATION-VERSION	2.2.9.debian                       
+MACHINE-TYPE               	X86-64                             
+MACHINE-VERSION            	13th Gen Intel(R) Core(TM) i7-1360P
+SOFTWARE-TYPE              	Linux                              
+SOFTWARE-VERSION           	5.15.153.1-microsoft-standard-WSL2 
+*handler-sleep-seconds*	0.001
+
+# -H Connection: close -t 4 -c 100 -d 10 http://localhost:4242/yo 
+Running 10s test @ http://localhost:4242/yo
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     5.26ms   14.94ms 453.30ms   98.55%
+    Req/Sec     3.23k     1.04k    6.24k    69.25%
+  128837 requests in 10.03s, 20.40MB read
+Requests/sec:  12841.96
+Transfer/sec:      2.03MB
+
+# -H Connection: close -t 4 -c 10 -d 10 http://localhost:4242/yo 
+Running 10s test @ http://localhost:4242/yo
+  4 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     0.88ms  569.82us  13.63ms   93.26%
+    Req/Sec     2.03k   319.82     2.73k    65.75%
+  80838 requests in 10.00s, 12.80MB read
+Requests/sec:   8079.96
+Transfer/sec:      1.28MB
+
+# -H Connection: close -t 16 -c 400 -d 10 http://localhost:4242/yo 
+Running 10s test @ http://localhost:4242/yo
+  16 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    16.01ms   59.81ms 894.81ms   95.07%
+    Req/Sec   765.96    470.05     4.05k    69.88%
+  118421 requests in 10.05s, 18.75MB read
+  Socket errors: connect 0, read 0, write 0, timeout 2
+Requests/sec:  11778.63
+Transfer/sec:      1.86MB
+

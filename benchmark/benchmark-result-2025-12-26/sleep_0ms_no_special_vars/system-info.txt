@@ -1,0 +1,11 @@
+LISP-IMPLEMENTATION-TYPE   	SBCL
+LISP-IMPLEMENTATION-VERSION	2.2.9.debian
+MACHINE-TYPE               	X86-64
+MACHINE-VERSION            	13th Gen Intel(R) Core(TM) i7-1360P
+SOFTWARE-TYPE              	Linux
+SOFTWARE-VERSION           	5.15.153.1-microsoft-standard-WSL2
+*handler-sleep-seconds*	0.001
+
+(defun handler-small-sleep ()
+  #+ ()
+  (sleep *handler-sleep-seconds*))

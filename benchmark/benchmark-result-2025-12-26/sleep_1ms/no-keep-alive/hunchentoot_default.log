@@ -1,0 +1,42 @@
+hunchentoot_default.log
+HUNCHENTOOT	1.3.1
+
+LISP-IMPLEMENTATION-TYPE   	SBCL                               
+LISP-IMPLEMENTATION-VERSION	2.2.9.debian                       
+MACHINE-TYPE               	X86-64                             
+MACHINE-VERSION            	13th Gen Intel(R) Core(TM) i7-1360P
+SOFTWARE-TYPE              	Linux                              
+SOFTWARE-VERSION           	5.15.153.1-microsoft-standard-WSL2 
+*handler-sleep-seconds*	0.001
+
+# -H Connection: close -t 4 -c 100 -d 10 http://localhost:4242/yo 
+Running 10s test @ http://localhost:4242/yo
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    21.77ms   79.68ms   1.76s    97.88%
+    Req/Sec     1.08k   353.86     2.13k    73.50%
+  43197 requests in 10.07s, 6.84MB read
+Requests/sec:   4287.66
+Transfer/sec:    695.07KB
+
+# -H Connection: close -t 4 -c 10 -d 10 http://localhost:4242/yo 
+Running 10s test @ http://localhost:4242/yo
+  4 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.77ms  348.10us   8.68ms   87.11%
+    Req/Sec     1.09k    79.28     1.19k    75.25%
+  43590 requests in 10.01s, 6.90MB read
+Requests/sec:   4354.83
+Transfer/sec:    705.96KB
+
+# -H Connection: close -t 16 -c 400 -d 10 http://localhost:4242/yo 
+Running 10s test @ http://localhost:4242/yo
+  16 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    29.33ms  123.69ms   1.78s    97.21%
+    Req/Sec   330.70    246.49     2.49k    73.14%
+  45327 requests in 10.10s, 7.18MB read
+  Socket errors: connect 0, read 0, write 0, timeout 16
+Requests/sec:   4488.72
+Transfer/sec:    727.66KB
+

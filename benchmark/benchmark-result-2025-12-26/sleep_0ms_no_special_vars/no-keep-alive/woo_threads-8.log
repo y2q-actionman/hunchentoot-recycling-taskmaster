@@ -1,0 +1,44 @@
+woo_threads-8.log
+WOO	0.12.0
+
+LISP-IMPLEMENTATION-TYPE   	SBCL                               
+LISP-IMPLEMENTATION-VERSION	2.2.9.debian                       
+MACHINE-TYPE               	X86-64                             
+MACHINE-VERSION            	13th Gen Intel(R) Core(TM) i7-1360P
+SOFTWARE-TYPE              	Linux                              
+SOFTWARE-VERSION           	5.15.153.1-microsoft-standard-WSL2 
+*handler-sleep-seconds*	0.001
+
+# -H Connection: close -t 4 -c 100 -d 10 http://localhost:5000 
+Running 10s test @ http://localhost:5000
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     2.94ms    2.89ms  29.87ms   88.10%
+    Req/Sec     7.15k     2.08k   11.80k    58.00%
+  284540 requests in 10.01s, 35.82MB read
+  Socket errors: connect 0, read 284526, write 0, timeout 0
+Requests/sec:  28428.21
+Transfer/sec:      3.58MB
+
+# -H Connection: close -t 4 -c 10 -d 10 http://localhost:5000 
+Running 10s test @ http://localhost:5000
+  4 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   469.69us  637.24us  22.23ms   98.77%
+    Req/Sec     3.46k   417.61     4.67k    72.95%
+  138767 requests in 10.10s, 17.47MB read
+  Socket errors: connect 0, read 138764, write 0, timeout 0
+Requests/sec:  13739.84
+Transfer/sec:      1.73MB
+
+# -H Connection: close -t 16 -c 400 -d 10 http://localhost:5000 
+Running 10s test @ http://localhost:5000
+  16 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     7.05ms   28.83ms 853.37ms   97.63%
+    Req/Sec     2.31k     0.97k   15.34k    74.55%
+  371252 requests in 10.05s, 46.74MB read
+  Socket errors: connect 0, read 371242, write 0, timeout 0
+Requests/sec:  36941.10
+Transfer/sec:      4.65MB
+

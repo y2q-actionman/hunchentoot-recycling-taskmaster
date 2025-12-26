@@ -1,0 +1,42 @@
+hunchentoot-recycling-taskmaster-atomic-taskmaster_threads-8-default.log
+HUNCHENTOOT-ATOMIC-OP-TASKMASTER	0.0.1
+
+LISP-IMPLEMENTATION-TYPE   	SBCL                               
+LISP-IMPLEMENTATION-VERSION	2.2.9.debian                       
+MACHINE-TYPE               	X86-64                             
+MACHINE-VERSION            	13th Gen Intel(R) Core(TM) i7-1360P
+SOFTWARE-TYPE              	Linux                              
+SOFTWARE-VERSION           	5.15.153.1-microsoft-standard-WSL2 
+*handler-sleep-seconds*	0.001
+
+# -H Connection: close -t 4 -c 100 -d 10 http://localhost:4242/yo 
+Running 10s test @ http://localhost:4242/yo
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     5.38ms   12.29ms 431.47ms   97.94%
+    Req/Sec     3.25k   745.63     6.01k    72.05%
+  126969 requests in 10.07s, 20.10MB read
+Requests/sec:  12612.60
+Transfer/sec:      2.00MB
+
+# -H Connection: close -t 4 -c 10 -d 10 http://localhost:4242/yo 
+Running 10s test @ http://localhost:4242/yo
+  4 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.34ms  201.75us   8.66ms   96.16%
+    Req/Sec     1.42k    62.14     1.52k    87.50%
+  56750 requests in 10.01s, 8.98MB read
+Requests/sec:   5669.94
+Transfer/sec:      0.90MB
+
+# -H Connection: close -t 16 -c 400 -d 10 http://localhost:4242/yo 
+Running 10s test @ http://localhost:4242/yo
+  16 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     9.55ms   33.94ms 875.42ms   97.35%
+    Req/Sec     0.89k   578.15     7.88k    71.10%
+  137762 requests in 10.10s, 21.81MB read
+  Socket errors: connect 0, read 1, write 0, timeout 0
+Requests/sec:  13643.59
+Transfer/sec:      2.16MB
+

@@ -1,0 +1,41 @@
+woo_threads-8.log
+WOO	0.12.0
+
+LISP-IMPLEMENTATION-TYPE   	SBCL                               
+LISP-IMPLEMENTATION-VERSION	2.2.9.debian                       
+MACHINE-TYPE               	X86-64                             
+MACHINE-VERSION            	13th Gen Intel(R) Core(TM) i7-1360P
+SOFTWARE-TYPE              	Linux                              
+SOFTWARE-VERSION           	5.15.153.1-microsoft-standard-WSL2 
+*handler-sleep-seconds*	0.0
+
+# -t 4 -c 100 -d 10 http://localhost:5000 
+Running 10s test @ http://localhost:5000
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     4.57ms    2.64ms  42.93ms   90.15%
+    Req/Sec     5.72k     1.72k   26.56k    92.00%
+  228024 requests in 10.05s, 33.92MB read
+Requests/sec:  22690.97
+Transfer/sec:      3.38MB
+
+# -t 4 -c 10 -d 10 http://localhost:5000 
+Running 10s test @ http://localhost:5000
+  4 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   802.67us    1.39ms  38.42ms   97.66%
+    Req/Sec     2.91k   549.55     4.21k    83.54%
+  116221 requests in 10.10s, 17.29MB read
+Requests/sec:  11507.42
+Transfer/sec:      1.71MB
+
+# -t 16 -c 400 -d 10 http://localhost:5000 
+Running 10s test @ http://localhost:5000
+  16 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    21.35ms    7.05ms  89.65ms   87.34%
+    Req/Sec     1.19k   509.90    12.01k    96.78%
+  190837 requests in 10.05s, 28.39MB read
+Requests/sec:  18979.80
+Transfer/sec:      2.82MB
+

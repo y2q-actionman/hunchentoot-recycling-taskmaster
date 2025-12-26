@@ -1,0 +1,41 @@
+cl-tbnl-gserver-tmgr_threads-8-default.log
+CL-TBNL-GSERVER-TMGR	0.1.1
+
+LISP-IMPLEMENTATION-TYPE   	SBCL                               
+LISP-IMPLEMENTATION-VERSION	2.2.9.debian                       
+MACHINE-TYPE               	X86-64                             
+MACHINE-VERSION            	13th Gen Intel(R) Core(TM) i7-1360P
+SOFTWARE-TYPE              	Linux                              
+SOFTWARE-VERSION           	5.15.153.1-microsoft-standard-WSL2 
+*handler-sleep-seconds*	0.001
+
+# -t 4 -c 100 -d 10 http://localhost:4242/yo 
+Running 10s test @ http://localhost:4242/yo
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   545.69us  469.56us  33.16ms   95.09%
+    Req/Sec    13.23k     2.27k   17.41k    72.28%
+  133028 requests in 10.10s, 18.65MB read
+Requests/sec:  13172.43
+Transfer/sec:      1.85MB
+
+# -t 4 -c 10 -d 10 http://localhost:4242/yo 
+Running 10s test @ http://localhost:4242/yo
+  4 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   592.12us  542.18us  15.36ms   97.70%
+    Req/Sec     2.99k     0.85k    4.37k    67.33%
+  120164 requests in 10.10s, 16.85MB read
+Requests/sec:  11897.36
+Transfer/sec:      1.67MB
+
+# -t 16 -c 400 -d 10 http://localhost:4242/yo 
+Running 10s test @ http://localhost:4242/yo
+  16 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   511.42us  294.93us  12.74ms   82.95%
+    Req/Sec    14.12k     2.56k   20.29k    72.82%
+  144790 requests in 10.07s, 20.30MB read
+Requests/sec:  14378.48
+Transfer/sec:      2.02MB
+

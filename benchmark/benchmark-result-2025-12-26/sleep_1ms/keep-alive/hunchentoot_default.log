@@ -1,0 +1,43 @@
+hunchentoot_default.log
+HUNCHENTOOT	1.3.1
+
+LISP-IMPLEMENTATION-TYPE   	SBCL                               
+LISP-IMPLEMENTATION-VERSION	2.2.9.debian                       
+MACHINE-TYPE               	X86-64                             
+MACHINE-VERSION            	13th Gen Intel(R) Core(TM) i7-1360P
+SOFTWARE-TYPE              	Linux                              
+SOFTWARE-VERSION           	5.15.153.1-microsoft-standard-WSL2 
+*handler-sleep-seconds*	0.001
+
+# -t 4 -c 100 -d 10 http://localhost:4242/yo 
+Running 10s test @ http://localhost:4242/yo
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    19.72ms   83.20ms 724.16ms   95.74%
+    Req/Sec     9.92k     5.05k   19.27k    65.08%
+  374079 requests in 10.09s, 52.44MB read
+Requests/sec:  37083.57
+Transfer/sec:      5.20MB
+
+# -t 4 -c 10 -d 10 http://localhost:4242/yo 
+Running 10s test @ http://localhost:4242/yo
+  4 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.34ms  160.36us   8.46ms   92.78%
+    Req/Sec     1.49k    61.75     1.60k    75.50%
+  59421 requests in 10.01s, 8.33MB read
+Requests/sec:   5933.22
+Transfer/sec:    851.74KB
+
+# -t 16 -c 400 -d 10 http://localhost:4242/yo 
+Running 10s test @ http://localhost:4242/yo
+  16 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    15.80ms   80.18ms   1.80s    97.54%
+    Req/Sec     2.12k     3.12k   17.31k    80.25%
+  293498 requests in 10.10s, 42.89MB read
+  Socket errors: connect 0, read 3936, write 6189, timeout 15
+  Non-2xx or 3xx responses: 10125
+Requests/sec:  29067.41
+Transfer/sec:      4.25MB
+

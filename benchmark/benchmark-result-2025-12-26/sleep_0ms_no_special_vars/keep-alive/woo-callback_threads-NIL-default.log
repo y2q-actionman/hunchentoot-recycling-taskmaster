@@ -1,0 +1,41 @@
+woo-callback_threads-NIL-default.log
+WOO	0.12.0
+
+LISP-IMPLEMENTATION-TYPE   	SBCL                               
+LISP-IMPLEMENTATION-VERSION	2.2.9.debian                       
+MACHINE-TYPE               	X86-64                             
+MACHINE-VERSION            	13th Gen Intel(R) Core(TM) i7-1360P
+SOFTWARE-TYPE              	Linux                              
+SOFTWARE-VERSION           	5.15.153.1-microsoft-standard-WSL2 
+*handler-sleep-seconds*	0.001
+
+# -t 4 -c 100 -d 10 http://localhost:5000 
+Running 10s test @ http://localhost:5000
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.62ms  734.33us  18.25ms   93.95%
+    Req/Sec    15.85k     3.68k   50.43k    79.30%
+  632567 requests in 10.10s, 94.11MB read
+Requests/sec:  62634.90
+Transfer/sec:      9.32MB
+
+# -t 4 -c 10 -d 10 http://localhost:5000 
+Running 10s test @ http://localhost:5000
+  4 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   341.69us  373.29us   9.62ms   95.57%
+    Req/Sec     6.27k     1.21k    9.33k    65.76%
+  251349 requests in 10.10s, 37.39MB read
+Requests/sec:  24886.29
+Transfer/sec:      3.70MB
+
+# -t 16 -c 400 -d 10 http://localhost:5000 
+Running 10s test @ http://localhost:5000
+  16 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    18.15ms   36.55ms 936.37ms   98.63%
+    Req/Sec     1.68k     1.22k   23.61k    93.60%
+  264798 requests in 10.10s, 39.39MB read
+Requests/sec:  26225.39
+Transfer/sec:      3.90MB
+

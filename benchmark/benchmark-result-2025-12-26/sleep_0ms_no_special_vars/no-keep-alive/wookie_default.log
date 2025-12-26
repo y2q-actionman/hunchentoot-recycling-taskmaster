@@ -1,0 +1,35 @@
+wookie_default.log
+WOOKIE	0.3.15
+
+LISP-IMPLEMENTATION-TYPE   	SBCL                               
+LISP-IMPLEMENTATION-VERSION	2.2.9.debian                       
+MACHINE-TYPE               	X86-64                             
+MACHINE-VERSION            	13th Gen Intel(R) Core(TM) i7-1360P
+SOFTWARE-TYPE              	Linux                              
+SOFTWARE-VERSION           	5.15.153.1-microsoft-standard-WSL2 
+*handler-sleep-seconds*	0.001
+
+# -H Connection: close -t 4 -c 100 -d 10 http://localhost:8080/hello-world 
+Running 10s test @ http://localhost:8080/hello-world
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    12.10ms    2.21ms  30.30ms   75.30%
+    Req/Sec     2.03k   141.76     2.48k    74.25%
+  80679 requests in 10.01s, 5.92MB read
+  Socket errors: connect 0, read 80669, write 0, timeout 0
+Requests/sec:   8056.04
+Transfer/sec:    605.78KB
+
+# -H Connection: close -t 4 -c 10 -d 10 http://localhost:8080/hello-world 
+Running 10s test @ http://localhost:8080/hello-world
+  4 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     0.00us    0.00us   0.00us    -nan%
+    Req/Sec     0.00      0.00     0.00      -nan%
+  0 requests in 10.05s, 0.00B read
+  Socket errors: connect 0, read 8, write 2408, timeout 0
+Requests/sec:      0.00
+Transfer/sec:       0.00B
+
+# -H Connection: close -t 16 -c 400 -d 10 http://localhost:8080/hello-world 
+

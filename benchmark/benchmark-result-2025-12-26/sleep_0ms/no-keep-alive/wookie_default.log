@@ -1,0 +1,44 @@
+wookie_default.log
+WOOKIE	0.3.15
+
+LISP-IMPLEMENTATION-TYPE   	SBCL                               
+LISP-IMPLEMENTATION-VERSION	2.2.9.debian                       
+MACHINE-TYPE               	X86-64                             
+MACHINE-VERSION            	13th Gen Intel(R) Core(TM) i7-1360P
+SOFTWARE-TYPE              	Linux                              
+SOFTWARE-VERSION           	5.15.153.1-microsoft-standard-WSL2 
+*handler-sleep-seconds*	0.0
+
+# -H Connection: close -t 4 -c 100 -d 10 http://localhost:8080/hello-world 
+Running 10s test @ http://localhost:8080/hello-world
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    15.35ms    2.07ms  30.95ms   77.46%
+    Req/Sec     1.63k   109.97     1.83k    50.25%
+  64924 requests in 10.01s, 4.77MB read
+  Socket errors: connect 0, read 64920, write 0, timeout 0
+Requests/sec:   6485.92
+Transfer/sec:    487.71KB
+
+# -H Connection: close -t 4 -c 10 -d 10 http://localhost:8080/hello-world 
+Running 10s test @ http://localhost:8080/hello-world
+  4 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.27ms  697.63us  16.61ms   95.53%
+    Req/Sec     1.59k   194.73     4.99k    94.26%
+  63274 requests in 10.10s, 4.65MB read
+  Socket errors: connect 0, read 63270, write 0, timeout 0
+Requests/sec:   6265.01
+Transfer/sec:    471.10KB
+
+# -H Connection: close -t 16 -c 400 -d 10 http://localhost:8080/hello-world 
+Running 10s test @ http://localhost:8080/hello-world
+  16 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    27.79ms   77.01ms   1.79s    98.95%
+    Req/Sec   437.56    338.19     2.25k    60.96%
+  60924 requests in 10.08s, 4.47MB read
+  Socket errors: connect 0, read 60919, write 0, timeout 21
+Requests/sec:   6044.48
+Transfer/sec:    454.52KB
+
