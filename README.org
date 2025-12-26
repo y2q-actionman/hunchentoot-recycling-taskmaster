@@ -8,27 +8,16 @@ thread synchronization.
 Therefore, it successfully implements a thread-pool-like mechanism
 without adding any new dependent libraries to hunchentoot.
 
-#+begin_comment
-translate to English:
-
-hunchentoot-recycling-taskmaster は、 hunchentoot に thread-pool と同様の thread を使い回す仕組みを足して
-接続確立時の処理を効率化することを狙った hunchentoot の taskmaster 実装です。
-
-この仕掛けは、 listen socket そのものを thread の待合せに使うことで実装しています。
-
-そのため、hunchentoot に新たな依存 ライブラリ を追加することなく、 thread-pool のような仕組みを実現することに成功しています。
-#+end_comment
-
 * TODO performance tl;dr
 
-[Image *no keep-alive* *sleeps for 0.1ms*.]
-[Image *keep-alive* *sleeps for 0.1ms*.]
+[Image *no keep-alive* *sleeps for 1ms*.]
+[Image *keep-alive* *sleeps for 1ms*.]
 
-On this benchmark, my HTTP handler *always sleeps for 0.1ms* to simulate some workloads.
+On this benchmark, my HTTP handler *always sleeps for 1ms* to simulate some workloads.
 
-- Hunchentoot is straightforward all-rounder. It works well on Keep-alive connections. I think it is good for typical use-cases.
-- If your workload does not utilize Keep-alive, hunchentoot-recycling-taskmaster may be useful.
-- Woo is difficult for me. Woo seems fast only when your handlers don't perform any computations. See below [link to "About Woo" below.]
+- Hunchentoot is an all-rounder. It works well on Keep-alive connections. I think it is good for typical use-cases.
+- If your workload does not utilize Keep-alive, my hunchentoot-recycling-taskmaster may be useful.
+- Woo is very difficult to use. Woo seems fast only when your handlers works with strictly no latency. See below [link to "About Woo" below.]
 
 * How to use
 
@@ -39,16 +28,61 @@ Hunchentoot on that does not handle a listen socket directly.
 
 ** Installation
 
-(stub)
+*** Loading
 
-** Running tests
+Currently hunchentoot-recycling-taskmaster is not on Quicklisp or ocicl.
+Please download it by yourself.
+
+#+begin_src sh
+  cd ~/quicklisp/local-projects
+  git clone https://github.com/y2q-actionman/hunchentoot-recycling-taskmaster.git
+#+end_src
+
+#+begin_src lisp
+  (ql:register-local-projects)            ; Do if required
+  (ql:quickload "hunchentoot-recycling-taskmaster")
+#+end_src
+
+*** Running tests
 
 #+begin_src common-lisp
   (ql:quickload "hunchentoot-recycling-taskmaster-test")
   (asdf:test-system '#:hunchentoot-recycling-taskmaster)
 #+end_src
 
+** Starting/stopping server
+
+You can use hunchentoot-recycling-taskmaster just by changing
+=hunchentoot:acceptor= to =hunchentoot-recycling-taskmaster:parallel-easy-acceptor=.
+
+#+begin_src common-lisp
+  (defparameter *test-server*
+    (make-instance 'hunchentoot-recycling-taskmaster:parallel-easy-acceptor
+		   :port 4242))
+  (hunchentoot:start *test-server*)
+#+end_src
+
+#+begin_src bash
+  curl "http://127.0.0.1:4242/yo"
+  # => "Hey!"
+#+end_src
+
+For stopping, =hunchentoot:stop= can be used.
+
+#+begin_src common-lisp
+  (hunchentoot:stop *test-server*)
+#+end_src
+
+See "demo.lisp".
+
 * Benchmarking
+
+** Running benchmarks
+
+#+begin_src common-lisp
+  (ql:quickload "hunchentoot-recycling-taskmaster-benchmark")
+  (asdf:test-system '#:hunchentoot-recycling-taskmaster-benchmark)
+#+end_src
 
 ** no keep-alive, sleep 0.1ms
 
