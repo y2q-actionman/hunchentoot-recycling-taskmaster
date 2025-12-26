@@ -74,7 +74,15 @@ For stopping, =hunchentoot:stop= can be used.
   (hunchentoot:stop *test-server*)
 #+end_src
 
-See [[demo.lisp][demo.lisp]] for examples above.
+See [[file:demo.lisp][demo.lisp]] for examples above.
+
+* How it works
+
+[[file:pics/hunchentoot-architecture.dot.png][hunchentoot arthitecture]]
+
+[[file:pics/hunchentoot-thread-pooling.dot.png][hunchentoot thread-pooling arthitecture]]
+
+[[file:pics/hunchentoot-recycling-taskmaster-architecture.dot.png][hunchentoot-recycling-taskmaster arthitecture]]
 
 * Benchmarking
 
@@ -167,3 +175,7 @@ Allegro CL においては、結構ききめがあった。
 おそらくは lock の競合がとても重いせいかなと思う。
 
 [Image]
+
+* License
+
+BSD 2-Clause, same as Hunchentoot. See [[file:LICENSE][LICENSE]].
