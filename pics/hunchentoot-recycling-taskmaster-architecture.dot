@@ -1,4 +1,6 @@
 digraph recycling_architecture {
+    size="6,4.5";
+
     rankdir=TB;
     fontsize=16;
     labelloc="t";

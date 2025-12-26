@@ -78,17 +78,14 @@ See [[file:demo.lisp][demo.lisp]] for examples above.
 
 * How it works
 
-#+ATTR_ORG: :width 300
 [[file:pics/hunchentoot-architecture.dot.png]]
 
 (stub hunchentoot)
 
-#+ATTR_ORG: :width 300
 [[file:pics/hunchentoot-thread-pooling.dot.png]]
 
 (stub hunchentoot + thread-pooling)
 
-#+ATTR_ORG: :width 300
 [[file:pics/hunchentoot-recycling-taskmaster-architecture.dot.png]]
 
 (stub hunchentoot-recycling-taskmaster;  thread-pooling + variable number of threads.)

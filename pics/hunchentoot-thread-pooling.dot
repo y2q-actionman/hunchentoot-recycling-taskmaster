@@ -1,4 +1,6 @@
 digraph thread_pooling_architecture {
+    size="8,6";
+    
     rankdir=TB;
     splines=true;
     nodesep=0.8;
