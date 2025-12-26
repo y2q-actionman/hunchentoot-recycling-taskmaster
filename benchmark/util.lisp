@@ -92,8 +92,7 @@
         (run-wrk-loop nil)))))
 
 (defun handler-small-sleep ()
-  (when (plusp *handler-sleep-seconds*)
-    (sleep *handler-sleep-seconds*)))
+  (sleep *handler-sleep-seconds*))
 
 (defun wait-for-starting-server ()
   (sleep 1))

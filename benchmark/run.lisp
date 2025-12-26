@@ -39,6 +39,6 @@
           (warn "bench-wookie was failed: ~A" condition))
         ret)
       (bench-woo)
-      ;; (bench-woo-callback)
+      (bench-woo-callback)
       ))
   t)

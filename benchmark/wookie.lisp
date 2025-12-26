@@ -42,7 +42,6 @@
          (progn
            ;; (uiop:run-program "curl -v http://localhost:8080/hello-world"
            ;;                   :output :interactive)
-           (run-wrk "http://localhost:8080/hello-world" "wookie_default.log" :wookie
-                    :test-no-keep-alive nil))
+           (run-wrk "http://localhost:8080/hello-world" "wookie_default.log" :wookie))
       (bt:destroy-thread server-thread))
     server-thread))
