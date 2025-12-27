@@ -1,0 +1,7 @@
+"system name"	"100 connections"	"10 connections"	"400 connections"
+"recycling-taskmaster"	5590.0	824.61	23270.0
+"hunchentoot"	23580.0	1770.0	25040.0
+"quux-hunchentoot"	36090.0	5740.0	43040.0
+"cl-tbnl-gserver-tmgr"	8460.0	1010.0	33050.0
+"wookie"	15350.0	1270.0	27790.0
+"woo"	6940.0	920.0	28200.0
