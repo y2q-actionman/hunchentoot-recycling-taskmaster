@@ -20,3 +20,4 @@
 *.bak*
 
 benchmark/*T*
+benchmark/**/*.tsv
