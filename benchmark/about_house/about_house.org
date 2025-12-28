@@ -1,0 +1,47 @@
+#+TITLE: Memos about running house
+
+* About House
+
+House is very fragile.
+
+With my few patch (https://github.com/y2q-actionman/house), I tried it using =curl=.
+It works at first:
+
+#+begin_quote
+CL-USER> (use-package :house)
+T
+CL-USER> (define-handler (hello-world :content-type "text/plain") ()
+      "Hello world!")
+	(define-handler (hello-you/<name>=>>string) ()
+	  (format nil "Hello there, ~a!" name))
+	(house:start 4040)
+#+end_quote
+
+#+begin_quote
+$ curl http://localhost:4040/hello-world
+Hello world!
+#+end_quote
+
+However, it breaks when I used =wrk=:
+
+#+begin_quote
+$ wrk -t 4 -c 10 -d 10 http://localhost:4040/hello-world
+Running 10s test @ http://localhost:4040/hello-world
+  4 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   382.00us    0.00us 382.00us  100.00%
+    Req/Sec    10.00      0.00    10.00    100.00%
+  1 requests in 10.10s, 307.00B read
+  Socket errors: connect 0, read 68057, write 0, timeout 0
+Requests/sec:      0.10
+Transfer/sec:      30.40B
+#+end_quote
+
+After that, =curl= fails also.
+
+#+begin_quote
+$ curl http://localhost:4040/hello-world
+curl: (52) Empty reply from server
+#+end_quote
+
+So, I gave up to benchmaking house...

@@ -142,9 +142,17 @@ hunchentoot.
 
 * Benchmark
 
-** Environments
+** Running benchmarks
+To run benchmark by yourself, do below:
 
-*** machine
+#+begin_src common-lisp
+  (ql:quickload "hunchentoot-recycling-taskmaster-benchmark")
+  (asdf:test-system '#:hunchentoot-recycling-taskmaster-benchmark)
+#+end_src
+
+** My Environments
+
+*** My machine
 
 | cl function name            |                                     |
 |-----------------------------+-------------------------------------|
@@ -155,7 +163,7 @@ hunchentoot.
 | SOFTWARE-TYPE               | Linux                               |
 | SOFTWARE-VERSION            | 5.15.153.1-microsoft-standard-WSL2  |
 
-*** library versions
+*** Server library versions and parameters
 
 | name                             | parameters             | version | Git commit                               |
 |----------------------------------+------------------------+---------+------------------------------------------|
@@ -166,39 +174,98 @@ hunchentoot.
 | wookie                           |                        |  0.3.15 | 1f74b6c24b463c1e6fff35377e477934f72bac20 |
 | woo                              | worker-num 8           |  0.12.0 | 7f5219c55d49190f5ae17b123a8729b31c5d706e |
 
+*** benchmarking tool
 
-** no keep-alive, sleep 1ms
+I used *wrk*, like below
 
-[[file:pics/benchmark-result-2025-12-26/sleep_1ms/no-keep-alive/100_connections_requests_sec__sleep_1ms__no_keep-alive__higher_is_better.svg]]
+#+begin_src bash
+  # keep-alive
+  wrk -t 4 -c 100 -d 10 http://localhost:4242/yo
+  # simulating no keep-alive
+  wrk "-H Connection: close" -t 4 -c 100 -d 10 http://localhost:4242/yo
+#+end_src
 
-** keep-alive, sleep 1ms
+** Results
+
+*** keep-alive, sleep 1ms
 
 [[file:pics/benchmark-result-2025-12-26/sleep_1ms/keep-alive/100_connections_requests_sec__sleep_1ms__keep-alive__higher_is_better.svg]]
+[[file:pics/benchmark-result-2025-12-26/sleep_1ms/keep-alive/100_connections_latency(us)__sleep_1ms__keep-alive__lower_is_better.svg]]
 
-Hunchentoot は接続ごとに 1 thread を割り当てる。
+On this benchmark, my HTTP handler *always responds after 1ms* to simulate some workloads.
 
-これはつまり、 HTTP/1.1 の keep-alive が有効であれば、 "Connection: close" などで明示的に接続を
-閉じるまでは、その接続に対応する thread はずっと使い回されることを意味する。
+Hunchentoot is quite fast.  As mentioned above, Hunchentoot assigns
+one thread per connection and keeps using that thread until the
+connection is closed.  Therefore, if a connection is kept alive,
+there's no delay from thread creation, and it doesn't become
+Hunchentoot slow.  =wrk= uses keep-alive by default, so this result
+benefits from this.
 
-そのため、 keep-alive が有効に使われている workload ならそんなに遅くない。
-wrk は keep-alive を default で使用するので、この恩恵を受けている。
+cl-tbnl-gserver-tmgr is not very fast. This is presumably because it
+only assigns 8 threads as workers.
 
-** keep-alive, no sleep
+Woo is not fast even set to 8 threads. See [[#about-woo][About Woo]] below.
 
-[Image]
+*** no keep-alive, sleep 1ms
 
-Woo はこの場合だけは早い。
+[[file:pics/benchmark-result-2025-12-26/sleep_1ms/no-keep-alive/100_connections_requests_sec__sleep_1ms__no_keep-alive__higher_is_better.svg]]
+[[file:pics/benchmark-result-2025-12-26/sleep_1ms/no-keep-alive/100_connections_latency(us)__sleep_1ms__no_keep-alive__lower_is_better.svg]]
 
-*** About Woo
+On this benchmark, HTTP handler still causes 1ms latency, and I
+simulated "no keep-alive" by adding =wrk= option ="-H Connection:
+close"= .
+
+Hunchentoot became quite slow. In this test, Hunchentoot works like
+"one thread per one request" so latencies caused by creating a new
+thread affected the result.
+
+hunchentoot-recycling-taskmaster is designed to work well in this
+situation.
+
+*** keep-alive, sleep 0ms
+
+[[file:pics/benchmark-result-2025-12-26/sleep_0ms/keep-alive/100_connections_requests_sec__sleep_0ms__keep-alive__higher_is_better.svg]]
+[[file:pics/benchmark-result-2025-12-26/sleep_0ms/keep-alive/100_connections_latency(us)__sleep_0ms__keep-alive__lower_is_better.svg]]
+
+On this benchmark, I set HTTP handler's latency to 0ms. (However some
+latencies caused by small computations still exist. See [[#about-woo][About Woo]] below.)
+
+hunchentoot-recycling-taskmaster became fast. I think this is because
+threads are accepting connections in parallel.
+
+*** no keep-alive, sleep 0ms
+
+[[file:pics/benchmark-result-2025-12-26/sleep_0ms/no-keep-alive/100_connections_requests_sec__sleep_0ms__no_keep-alive__higher_is_better.svg]]
+[[file:pics/benchmark-result-2025-12-26/sleep_0ms/no-keep-alive/100_connections_latency(us)__sleep_0ms__no_keep-alive__lower_is_better.svg]]
+
+On this benchmark, I set HTTP handler's latency to 0ms like above, and set
+=wrk= option ="-H Connection:close"= .
+
+Here, Woo finally takes first place, with
+hunchentoot-recycling-taskmaster coming in a close second.
+
+*** Other results
+
+- See [[pics/benchmark-result-2025-12-26/benchmark-result-2025-12-26.org][benchmark-result-2025-12-26.org]] for graphs with "400 connections" parameters
+- See [[benchmark/benchmark-result-2025-12-26][this directory]] for raw data.
+
+** About Woo
 
 Woo は handler が少しでも遅延すると disastaours に遅くなる。
-上の "0.1ms sleep" のとき、  Woo の handler には以下のように書いたが、これが酷い結果を招く。
+上の "1ms sleep" のとき、  Woo は以下のように起動しているが、これが酷い結果を招く。
 
 #+begin_src lisp
-  (lambda (env)
-    (declare (ignore env))
-    (sleep 0.0001)
-    '(200 (:content-type "text/plain") ("Hello, World")))
+  (defparameter *handler-sleep-seconds* 0)
+
+  (defun handler-small-sleep ()
+    (sleep *handler-sleep-seconds*))
+
+  (woo:run
+   (lambda (env)
+     (declare (ignore env))
+     (handler-small-sleep)
+     '(200 (:content-type "text/plain") ("Hello, World")))
+   :worker-num 8)
 #+end_src
 
 これは、 Woo が 1 thread で複数の connection を同時に扱う async なサーバであるため、
@@ -267,7 +334,8 @@ event loop の実体であるところの =*evloop*= 変数は =(make-thread)= �
   (sleep *handler-sleep-seconds*))
 #+end_src
 
-[Graph]
+[[file:pics/benchmark-result-2025-12-26/sleep_0ms_no_special_vars/keep-alive/100_connections_requests_sec__sleep_commented_out__keep-alive__higher_is_better.svg]]
+[[file:pics/benchmark-result-2025-12-26/sleep_0ms_no_special_vars/keep-alive/100_connections_latency(us)__sleep_commented_out__keep-alive__lower_is_better.svg]]
 
 というわけで、 Woo の性能を引き出すには special variable も呼んではいけないことが分かる。
 つまり、 Woo においては your handlers works with strictly no latency でないといけないのである。
@@ -281,51 +349,6 @@ Woo の状況が変わらなければ、 it could be said that Woo is very fast 
 
 
    
-*** About House
-
-House is very fragile.
-
-With my few patch (https://github.com/y2q-actionman/house), I tried it using =curl=.
-It works at first:
-
-#+begin_quote
-CL-USER> (use-package :house)
-T
-CL-USER> (define-handler (hello-world :content-type "text/plain") ()
-      "Hello world!")
-	(define-handler (hello-you/<name>=>>string) ()
-	  (format nil "Hello there, ~a!" name))
-	(house:start 4040)
-#+end_quote
-
-#+begin_quote
-$ curl http://localhost:4040/hello-world
-Hello world!
-#+end_quote
-
-However, it breaks when I used =wrk=:
-
-#+begin_quote
-$ wrk -t 4 -c 10 -d 10 http://localhost:4040/hello-world
-Running 10s test @ http://localhost:4040/hello-world
-  4 threads and 10 connections
-  Thread Stats   Avg      Stdev     Max   +/- Stdev
-    Latency   382.00us    0.00us 382.00us  100.00%
-    Req/Sec    10.00      0.00    10.00    100.00%
-  1 requests in 10.10s, 307.00B read
-  Socket errors: connect 0, read 68057, write 0, timeout 0
-Requests/sec:      0.10
-Transfer/sec:      30.40B
-#+end_quote
-
-After that, =curl= fails also.
-
-#+begin_quote
-$ curl http://localhost:4040/hello-world
-curl: (52) Empty reply from server
-#+end_quote
-
-So, I gave up to benchmaking house...
 
 ** Ideas
 
@@ -342,22 +365,19 @@ Allegro CL においては、結構ききめがあった。
 [Image]
 
 
-** Running benchmarks
-
-To run benchmark by yourself, do below:
-
-#+begin_src common-lisp
-  (ql:quickload "hunchentoot-recycling-taskmaster-benchmark")
-  (asdf:test-system '#:hunchentoot-recycling-taskmaster-benchmark)
-#+end_src
-
-* TODO
+* TODO TODO list
 
 ** register to systems
 
 - [ ] quicklisp
 - [ ] ultralisp
 - [ ] ocicl
+
+** Benchmark other servers
+
+- [ ] conserv :: Causing =cl:type-error= when I used its sample code.
+- [ ] house :: Very fragile. See [[benchmark/about_house/about_house.org][my memo]] .
+- [ ] teepeedee2 :: cannot be loaded by my machine because of [[benchmark/loading.org]["heap exhausted" error]].
 
 * License
 
