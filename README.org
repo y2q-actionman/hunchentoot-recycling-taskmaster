@@ -16,11 +16,11 @@ On this benchmark, my HTTP handler *always responds after 1ms* to simulate some 
 - If your workload does not utilize Keep-alive, hunchentoot-recycling-taskmaster may be useful.
 - Woo is very difficult to use. Woo seems fast only when your handlers work with strictly no latency. See [[#about-woo][About Woo]] below.
 
-In detail, See [[#benchmarking][Benchmarking]] below.
+In detail, See [[#benchmark][Benchmark]] below.
   
 * How to use
 
-** About Lispworks
+** Caution about Lispworks
 
 On Lispworks, hunchentoot-recycling-taskmaster does not works because
 Hunchentoot on that does not handle a listen socket directly.
@@ -77,7 +77,7 @@ See [[file:demo.lisp][demo.lisp]] for the sample codes above.
 
 ** API
 
-These symbols are exported from the `hunchentoot-recycling-taskmaster` package.
+These symbols are exported from =hunchentoot-recycling-taskmaster= package.
 Please see their docstring also.
 
 - [Class] =parallel-acceptor=
@@ -92,57 +92,80 @@ Please see their docstring also.
 
 * How it works
 
-
-hunchentoot-recycling-taskmaster is a hunchentoot taskmaster implementation
-that aims to improve the efficiency of connection establishment by
-adding a thread recycling mechanism.
-This mechanism is implemented by using the listen socket itself for
-thread synchronization.
-Therefore, it successfully implements a thread-pool-like mechanism
-without adding any new dependent libraries to hunchentoot.
+hunchentoot-recycling-taskmaster is a hunchentoot taskmaster
+implementation that aims to improve the efficiency of connection
+establishment. This section shows how it works.
 
 ** Hunchentoot; make one thread per connection.
 
-[[file:pics/hunchentoot-architecture.dot.png]]
+[[file:pics/architecture/hunchentoot-architecture.dot.png]]
 
-Hunchentoot makes one thread per one connection.
-It delays a bit for every new connections, but
-it runs well on keep-alive connections.
+Hunchentoot uses one thread per one connection.  It means when a
+client use one keep-alive connection for multiple requests,
+Hunchentoot dedicate one thread to that connection.  There is some
+delay for new connections, but it works well on keep-alive
+connections.
 
 ** quux-hunchentoot and cl-tbnl-gserver-tmgr; Thread pooling
 
-[[file:pics/hunchentoot-thread-pooling.dot.png]]
+[[file:pics/architecture/hunchentoot-thread-pooling.dot.png]]
 
 These implementations utilize a thread pool around Hunchentoot.
-Instead of making a new thread for a new connection, they
-reuse threads kept in its thread pool, so
-they can reduce latency for new connections.
+Instead of making a new thread for a new connection, they reuse
+threads kept in its thread pool, reducing latency for new connections.
 
-However, their benchmarks don't show signifinant differences
-from the original Hunchentoot. This is because of two reasons.
+However, their benchmarks don't show significant differences from the
+original Hunchentoot. I suspect this is for two reasons:
 
-1. HTTP benchmarking tool like "wrk" utilizes keep-alive connections.
-   Effects of thread-pooling is limited at the beginning.
+1. HTTP benchmarking tool, such as "wrk", utilizes keep-alive
+   connections.  Effects of thread-pooling are limited at the
+   beginning of benchmarking.
 2. Their thread-pool's size may be fixed. They cannot
    increase threads like Hunchentoot even on high workloads.
 
 ** hunchentoot-recycling-taskmaster
 
-[[file:pics/hunchentoot-recycling-taskmaster-architecture.dot.png]]
+[[file:pics/architecture/hunchentoot-recycling-taskmaster-architecture.dot.png]]
 
-hunchentoot-recycling-taskmaster tries to take both.
+hunchentoot-recycling-taskmaster tries to take both, thread-pooling
+and changing the number of threads dynamically. In
+hunchentoot-recycling-taskmaster, threads don't only work on connected
+sockets but also some management tasks, such as accepting a new
+connection from the listen socket, creating a new thread, or
+terminating themselves.
 
-In it, threads don't only work on connected sockets but take a new
-connection from the listen socket, makes a new thread, or end itself.
+For this management, all threads share the listen socket for
+synchronizing acceptance and track how many threads on it.  Since
+using the listen socket, hunchentoot-recycling-taskmaster successfully
+implements these mechanisms without adding new dependencies to
+hunchentoot.
 
-This architecure achives two aspects above.
-
-1. Reducing latency of making a new thread. (effects by thread-pooling)
-2. Automatic increasing/decreasing threads against workloads (effects by changing the number of threads).
-
-* Benchmarking
+* Benchmark
 
 ** Environments
+
+*** machine
+
+| cl function name            |                                     |
+|-----------------------------+-------------------------------------|
+| LISP-IMPLEMENTATION-TYPE    | SBCL                                |
+| LISP-IMPLEMENTATION-VERSION | 2.2.9.debian                        |
+| MACHINE-TYPE                | X86-64                              |
+| MACHINE-VERSION             | 13th Gen Intel(R) Core(TM) i7-1360P |
+| SOFTWARE-TYPE               | Linux                               |
+| SOFTWARE-VERSION            | 5.15.153.1-microsoft-standard-WSL2  |
+
+*** library versions
+
+| name                             | parameters             | version | Git commit                               |
+|----------------------------------+------------------------+---------+------------------------------------------|
+| hunchentoot-recycling-taskmaster | standby-thread-count 8 |   0.0.1 | 82913edaf3f65afb189f0d72ddeb6339bf0499ae |
+| hunchentoot                      |                        |   1.3.1 | d1617e9d4eab6cb801c56cf36d9b0aab134fb7e6 |
+| quux-hunchentoot                 |                        |   1.0.2 | quux-hunchentoot-20211230-git            |
+| cl-tbnl-gserver-tmgr             | max-thread-count 8     |   0.1.1 | 1ae71c9324e876761cd1ee51768a34f0793e6879 |
+| wookie                           |                        |  0.3.15 | 1f74b6c24b463c1e6fff35377e477934f72bac20 |
+| woo                              | worker-num 8           |  0.12.0 | 7f5219c55d49190f5ae17b123a8729b31c5d706e |
+
 
 ** no keep-alive, sleep 1ms
 
@@ -330,9 +353,11 @@ To run benchmark by yourself, do below:
 
 * TODO
 
-quicklisp
-ultralisp
-ocicl
+** register to systems
+
+- [ ] quicklisp
+- [ ] ultralisp
+- [ ] ocicl
 
 * License
 

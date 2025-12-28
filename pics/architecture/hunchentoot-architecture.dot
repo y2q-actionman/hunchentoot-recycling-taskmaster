@@ -1,4 +1,4 @@
-digraph traditional_architecture {
+digraph hunchentoot_architecture {
     size="8,6";
     
     rankdir=TB;
@@ -8,7 +8,7 @@ digraph traditional_architecture {
 
     fontsize=20;
     labelloc="t";
-    label="Traditional Hunchentoot Thread Model";
+    label="Hunchentoot Thread Model";
 
     node [style=filled, color=white, shape=ellipse, fontsize=14];
     edge [fontsize=12];

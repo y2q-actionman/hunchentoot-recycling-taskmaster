@@ -4,7 +4,7 @@ digraph recycling_architecture {
     rankdir=TB;
     fontsize=16;
     labelloc="t";
-    label="Hunchentoot-Recycling-Taskmaster: Worker Loop Model";
+    label="Hunchentoot-Recycling-Taskmaster Model";
 
     node [shape=box, style=rounded, width=1.5, height=0.7];
     edge [fontsize=10];
