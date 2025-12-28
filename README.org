@@ -285,15 +285,17 @@ content to be sent and received, or set up a callback to be called.
 But for some reason, Woo doesn't seem to have such a mechanism.
 I couldn't find it.
 # another one says "Woo has no async foundation", too: https://news.ycombinator.com/item?id=29019217
+# https://lisp-journey.gitlab.io/blog/why-turtl-switched-from-lisp-to-js/
+# https://killtheradio.net/technology/cl-async-non-blocking-asynchronous-programming-for-common-lisp/
 
 [[https://github.com/quickdocs/quickdocs-api/tree/master][quickdocs-api]], which is said to use Woo, and [[https://github.com/TechEmpower/FrameworkBenchmarks/pull/8313][this code]]
 do not seem to take such considerations into account.
 # (It may be a one reason of not good benchmark linked by [[https://www.reddit.com/r/Common_Lisp/comments/1506kqb/comment/js220a6/][this Reddit thread]].)
 
-Some people on [[https://lisp-journey.gitlab.io/blog/why-turtl-switched-from-lisp-to-js/][a blog]] or [[https://www.reddit.com/r/Common_Lisp/comments/1hmxv4k/comment/m4feb4b/][a reddit comment]] have said that "offloading
-is possible with lparallel", but I have yet to find any code that
-actually does this. The following code, which creates a thread in
-naive, will result in an error.
+Some people on [[https://news.ycombinator.com/item?id=29019217][here]] or [[https://www.reddit.com/r/Common_Lisp/comments/1hmxv4k/comment/m4feb4b/][here]] have said that "offloading is possible
+with lparallel", but I have yet to find any code that actually does
+this. The following code, which creates a thread in naive, will result
+in an error.
 
 #+begin_src common-lisp
   ;; Making a thread like below don't works because `woo.ev:*evloop*' is NIL.
@@ -367,7 +369,8 @@ work with strictly no latency.
 
 If Woo's situation doesn't change, it could be said that Woo is very
 fast only when your handlers don't compute anything.  I think Woo is
-*only* good for serving static pages or microbenchmarking.
+*only* good for serving static pages
+# or microbenchmarking.
 # but why did such a thing by Lisp? Use nginx.
 
 * TODO TODO list
@@ -375,7 +378,7 @@ fast only when your handlers don't compute anything.  I think Woo is
 ** register to systems
 
 - [ ] quicklisp
-- [ ] ultralisp
+- [X] ultralisp
 - [ ] ocicl
 
 ** Benchmark other servers
@@ -386,8 +389,8 @@ fast only when your handlers don't compute anything.  I think Woo is
 
 ** Ideas
 
-- [ ] Using atomic variables -- its impact is small on SBCL, large on Allegro CL.
-- [ ] make the  number of standby-thread-count to variadic.
+- [ ] Using atomic variables -- its impact is small on SBCL, large on Allegro CL. See [[/atomic-op-taskmaster]] in this repository.
+- [ ] make the number of =standby-thread-count= to variadic.
 
 * License
 
