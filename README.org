@@ -350,21 +350,6 @@ Woo の状況が変わらなければ、 it could be said that Woo is very fast 
 
    
 
-** Ideas
-
-bordeaux-threads-2 に追加された atomic 変数を使って lock を減らすのも試してみた。
-
-SBCL においては、 hunchentoot の slot については効果が少なかった。
-recycling-taskmaster の追加 slot においては有効であった。
-
-[Image]
-
-Allegro CL においては、結構ききめがあった。
-おそらくは lock の競合がとても重いせいかなと思う。
-
-[Image]
-
-
 * TODO TODO list
 
 ** register to systems
@@ -378,6 +363,11 @@ Allegro CL においては、結構ききめがあった。
 - [ ] conserv :: Causing =cl:type-error= when I used its sample code.
 - [ ] house :: Very fragile. See [[benchmark/about_house/about_house.org][my memo]] .
 - [ ] teepeedee2 :: cannot be loaded by my machine because of [[benchmark/loading.org]["heap exhausted" error]].
+
+** Ideas
+
+- [ ] Using atomic variables -- its impact is small on SBCL, large on Allegro CL.
+- [ ] make the  number of standby-thread-count to variadic.
 
 * License
 
