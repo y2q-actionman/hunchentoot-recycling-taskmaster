@@ -251,8 +251,11 @@ hunchentoot-recycling-taskmaster coming in a close second.
 
 ** About Woo
 
-Woo は handler が少しでも遅延すると disastaours に遅くなる。
-上の "1ms sleep" のとき、  Woo は以下のように起動しているが、これが酷い結果を招く。
+*** How to sleep?
+
+Woo becomes disastrously slow if the handler is even slightly delayed.
+With the above "1ms sleep" benchmark, Woo starts up as follows, which
+leads to terrible results:
 
 #+begin_src lisp
   (defparameter *handler-sleep-seconds* 0)
@@ -268,87 +271,104 @@ Woo は handler が少しでも遅延すると disastaours に遅くなる。
    :worker-num 8)
 #+end_src
 
-これは、 Woo が 1 thread で複数の connection を同時に扱う async なサーバであるため、
- 1 connection の処理の中で遅延が発生すると同一 thread の他 connection 全ての処理が遅延するためである。
-async な architecture から考えれば sleep してはいけないのは自明のことだ。
+This is because Woo is an async server that handles multiple
+connections simultaneously in one thread.  If a delay occurs in the
+processing of one connection, the processing of all other connections
+in the same thread will be delayed.  Given its async architecture,
+=sleep= like above is obviously discouraged.
 
-さてこのような場合、一般的には async server の event loop 内部で sleep したりはしない。
-event loop の外で時間がかかる処理を実行し、それが終わったら event loop に送受信する内容を通知したり、
-callback を呼び出してもらうよう設定したりするようなことが行われる。
-(このため、かつて =async= が使われるようになるより前の Node.js の code は callback hell などと呼ばれていたわけだが)
+In cases like this, you generally don't sleep inside the async
+server's event loop.  You run time-consuming processing outside the
+event loop, and when it's finished, you notify the event loop of the
+content to be sent and received, or set up a callback to be called.
 
+But for some reason, Woo doesn't seem to have such a mechanism.
+I couldn't find it.
+# another one says "Woo has no async foundation", too: https://news.ycombinator.com/item?id=29019217
 
-しかし、どういうわけか Woo にはそのような仕組みがないように思う。私は見つけられなかった。
-Woo を使っているとされる quickdocs-api や、 https://github.com/TechEmpower/FrameworkBenchmarks/pull/8313 では
-そのような配慮はしていないようだ。
-(だから https://www.reddit.com/r/Common_Lisp/comments/1506kqb/comment/js220a6/ の link 先で見られる benchmark 結果は奮わないのだろう。
-https://www.reddit.com/r/Common_Lisp/comments/1hgbaco/how_fast_common_lisp_could_be_tremendous/)
+[[https://github.com/quickdocs/quickdocs-api/tree/master][quickdocs-api]], which is said to use Woo, and [[https://github.com/TechEmpower/FrameworkBenchmarks/pull/8313][this code]]
+do not seem to take such considerations into account.
+# (It may be a one reason of not good benchmark linked by [[https://www.reddit.com/r/Common_Lisp/comments/1506kqb/comment/js220a6/][this Reddit thread]].)
 
-一部 SNS のコメント ( https://lisp-journey.gitlab.io/blog/why-turtl-switched-from-lisp-to-js/,
-reddit のやつ) では、 "lparallel で offload できる" と言っている人がいるが、それを実際にやっている
-コードを私はまだ見付けられていない。以下のような naive に thread を立てるコードはエラーになる。
-event loop の実体であるところの =*evloop*= 変数は =(make-thread)= で作った thread では
-参照できず、 =NIL= になってしまうためだ。
+Some people on [[https://lisp-journey.gitlab.io/blog/why-turtl-switched-from-lisp-to-js/][a blog]] or [[https://www.reddit.com/r/Common_Lisp/comments/1hmxv4k/comment/m4feb4b/][a reddit comment]] have said that "offloading
+is possible with lparallel", but I have yet to find any code that
+actually does this. The following code, which creates a thread in
+naive, will result in an error.
 
-(lparallelすればいいじゃん　→　最初からhunchentootでいいじゃん。それだと one-thread-per-request になり得る)
+#+begin_src common-lisp
+  ;; Making a thread like below don't works because `woo.ev:*evloop*' is NIL.
+  (defparameter *woo-callback-threads-app*
+    (lambda (_env)
+      (declare (ignore _env))
+      (lambda (callback)
+	(bt:make-thread (lambda ()
+			  (funcall callback '(200 (:content-type "text/plain") ("Hello, World"))))))))
 
-この問題は Woo が依存している libev を直接扱い、 event loop を直接扱って、 sleep 等を
-自分で作れば解決できなくはない。 [このコード] は Gemini-CLI が書いてきたものである。
-確かに動作したし benchmark も悪くない。ただ、このコードがどうやって動いているかを私は知らない。
-聞かないでほしい。
+  (clack:clackup *woo-callback-threads-app* :server :woo)
 
+  ;; Binding like that does not works also.
+  (let ((evloop woo.ev:*evloop*))
+    (bt:make-thread (lambda (&aux (woo.ev:*evloop* evloop))
+		      (funcall callback '(200 (:content-type "text/plain") ("Hello, World"))))))
+#+end_src
 
-そういうわけで、 Woo で "sleep 1ms" を benchmark するのには、上記の酷いコード例
-を使わざるを得ないように思う。これは Woo にとって非常に不利だが、 Woo のサポートが
-欠如がしているし、 quickdocs-api もそのように書かれているので仕方のないことだろう。
+This is because the =woo.ev:*evloop*= variable, which is the
+actual event loop, cannot be referenced in the thread created with
+=(make-thread)= and will become =NIL=.
 
+# By the way, using lparallel like above will be "one-thread-per-request" model.
+# I think that will poorly perform than "one-thread-per-connection" of Hunchentoot.
 
-また、 "sleep 0ms" を見て「世間で言われているほど Woo が速くないのでは？」と思った人もいるだろう。
-私もそう思って調べたところ、この benchmark の handler 定義を以下のようにしていることが原因と分かった。
+This problem can be solved by directly handling libev, which Woo
+depends on, directly handling the event loop, and creating sleep etc.
+[[benchmark/about_woo/woo-timer-cb--written-by-gemini--working.lisp][This code]] was written by Gemini-CLI.  It certainly works, and the
+benchmarks aren't bad. However, I don't know how this code works.
+Don't ask me.
+
+So, to benchmark "sleep 1ms" in Woo, I have no choice but to use the
+terrible code example above.  This is a huge disadvantage to Woo, but
+it's unavoidable due to the lack of support in Woo and the way
+quickdocs-api is written.
+
+*** Don't evaluate special variables
+
+Some people might look at the above [[#keep-alive-sleep-0ms][keep-alive sleep 0ms result]] and
+wonder "Maybe Woo isn't as fast as people say?"  I thought the same
+thing, investigated and found that the cause was that the handler
+definition for this benchmark calls =(handler-small-sleep)=
+defined above.
 
 #+begin_src common-lisp
   (defparameter *handler-sleep-seconds* 0)
 
   (defun handler-small-sleep ()
-  (sleep *handler-sleep-seconds*))
-
-  (woo:run
-		  (lambda (env)
-		    (declare (ignore env))
-		    (handler-small-sleep)
-		    '(200 (:content-type "text/plain") ("Hello, World")))
-		  :worker-num threads)
-
+    (sleep *handler-sleep-seconds*))
 #+end_src
 
-このコードは以下を行う。
-1. special varibale を eval する。 (0 になる)
-2. =cl:sleep= を 0 で呼ぶ。 (直ちに戻る。
+This code does the following:
+1. Eval the special variable (which becomes 0).
+2. Call =cl:sleep= with 0 (which should return immediately).
 
-この二つの処理はほどんど時間がかかるものではないが、残念ながら woo では問題になる。
-以下のように =handler-small-sleep= を変更すると、次の graph のように速くなったのである。
+These two processes don't take much time, but unfortunately they cause
+problems in woo.  Changing =handler-small-sleep= as follows made it
+faster, as shown in the following graph.
 
 #+begin_src common-lisp
-(defun handler-small-sleep ()
-  #+ ()
-  (sleep *handler-sleep-seconds*))
+  (defun handler-small-sleep ()
+    )
 #+end_src
 
 [[file:pics/benchmark-result-2025-12-26/sleep_0ms_no_special_vars/keep-alive/100_connections_requests_sec__sleep_commented_out__keep-alive__higher_is_better.svg]]
 [[file:pics/benchmark-result-2025-12-26/sleep_0ms_no_special_vars/keep-alive/100_connections_latency(us)__sleep_commented_out__keep-alive__lower_is_better.svg]]
 
-というわけで、 Woo の性能を引き出すには special variable も呼んではいけないことが分かる。
-つまり、 Woo においては your handlers works with strictly no latency でないといけないのである。
+So, to get the most out of Woo's performance, you should not evalutate
+special variables either.  In other words, in Woo your handlers must
+work with strictly no latency.
 
-
-Woo の状況が変わらなければ、 it could be said that Woo is very fast only when your handlers does not compute anything.
- think Woo is *only* good for serving static pages or microbenchmarking
-
+If Woo's situation doesn't change, it could be said that Woo is very
+fast only when your handlers don't compute anything.  I think Woo is
+*only* good for serving static pages or microbenchmarking.
 # but why did such a thing by Lisp? Use nginx.
-
-
-
-   
 
 * TODO TODO list
 
