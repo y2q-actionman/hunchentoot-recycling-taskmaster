@@ -1,24 +1,23 @@
 * Abstract
 
-hunchentoot-recycling-taskmaster is a hunchentoot taskmaster implementation
-that aims to improve the efficiency of connection establishment by
-adding a thread recycling mechanism.
-This mechanism is implemented by using the listen socket itself for
-thread synchronization.
-Therefore, it successfully implements a thread-pool-like mechanism
-without adding any new dependent libraries to hunchentoot.
+hunchentoot-recycling-taskmaster is a taskmaster implementation for Hunchentoot,
+aiming to improve connection establishment efficiency through thread-pooling
+and flexible thread count adjustment.
 
-* TODO performance tl;dr
+* Performance tl;dr
 
-[Image *no keep-alive* *sleeps for 1ms*.]
-[Image *keep-alive* *sleeps for 1ms*.]
+[[file:pics/benchmark-result-2025-12-26/sleep_1ms/no-keep-alive/100 connections requests_sec, sleep 1ms, no keep-alive, higher is better.svg]]
+[[
+file:pics/benchmark-result-2025-12-26/sleep_1ms/keep-alive/100 connections requests_sec, sleep 1ms, no keep-alive, higher is better.svg]]
 
-On this benchmark, my HTTP handler *always sleeps for 1ms* to simulate some workloads.
+On this benchmark, my HTTP handler *always responds after 1ms* to simulate some workloads.
 
 - Hunchentoot is an all-rounder. It works well on Keep-alive connections. I think it is good for typical use-cases.
-- If your workload does not utilize Keep-alive, my hunchentoot-recycling-taskmaster may be useful.
-- Woo is very difficult to use. Woo seems fast only when your handlers works with strictly no latency. See below [link to "About Woo" below.]
+- If your workload does not utilize Keep-alive, hunchentoot-recycling-taskmaster may be useful.
+- Woo is very difficult to use. Woo seems fast only when your handlers work with strictly no latency. See [[#about-woo][About Woo]] below.
 
+In detail, See [[#benchmarking][Benchmarking]] below.
+  
 * How to use
 
 ** About Lispworks
@@ -30,7 +29,7 @@ Hunchentoot on that does not handle a listen socket directly.
 
 *** Loading
 
-Currently hunchentoot-recycling-taskmaster is not on Quicklisp or ocicl.
+Currently hunchentoot-recycling-taskmaster is not on Quicklisp, Ultralisp or ocicl.
 Please download it by yourself.
 
 #+begin_src sh
@@ -76,17 +75,62 @@ To stop it, =hunchentoot:stop= can be used.
 
 See [[file:demo.lisp][demo.lisp]] for the sample codes above.
 
+** API
+
+These symbols are exported from the `hunchentoot-recycling-taskmaster` package.
+Please see their docstring also.
+
+- [Class] =parallel-acceptor=
+- [Class] =parallel-easy-acceptor=
+- [Class] =parallel-ssl-acceptor=
+- [Class] =parallel-easy-ssl-acceptor=
+- [Class] =recycling-taskmaster=
+- [Variable] =*default-standby-thread-count*=
+  
+- [Function] =abandon-acceptor=
+- [Condition] =recycling-taskmaster-corrupted-error=
+
 * How it works
+
+
+hunchentoot-recycling-taskmaster is a hunchentoot taskmaster implementation
+that aims to improve the efficiency of connection establishment by
+adding a thread recycling mechanism.
+This mechanism is implemented by using the listen socket itself for
+thread synchronization.
+Therefore, it successfully implements a thread-pool-like mechanism
+without adding any new dependent libraries to hunchentoot.
+
+** Hunchentoot; make one thread per connection.
 
 [[file:pics/hunchentoot-architecture.dot.png]]
 
-(stub hunchentoot)
+Hunchentoot makes one thread per one connection.
+It delays a bit for every new connections, but
+it runs well on keep-alive connections.
+
+** quux-hunchentoot and cl-tbnl-gserver-tmgr; Thread pooling
 
 [[file:pics/hunchentoot-thread-pooling.dot.png]]
 
-(stub hunchentoot + thread-pooling)
+These implementations utilize a thread pool around Hunchentoot.
+Instead of making a new thread for a new connection, they
+reuse threads kept in its thread pool, so
+they can reduce latency for new connections.
+
+However, their benchmarks don't show signifinant differences
+from the original Hunchentoot. This is because of two reasons.
+
+1. HTTP benchmarking tool like "wrk" utilizes keep-alive connections.
+   Effects of thread-pooling is limited at the beginning.
+2. Their thread-pool's size may be fixed. They cannot
+   increase threads like Hunchentoot even on high workloads.
+
+** hunchentoot-recycling-taskmaster
 
 [[file:pics/hunchentoot-recycling-taskmaster-architecture.dot.png]]
+
+
 
 (stub hunchentoot-recycling-taskmaster;  thread-pooling + variable number of threads.)
 
