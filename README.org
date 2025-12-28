@@ -6,9 +6,9 @@ and flexible thread count adjustment.
 
 * Performance tl;dr
 
-[[file:pics/benchmark-result-2025-12-26/sleep_1ms/no-keep-alive/100 connections requests_sec, sleep 1ms, no keep-alive, higher is better.svg]]
+[[file:pics/benchmark-result-2025-12-26/sleep_1ms/keep-alive/100_connections_requests_sec__sleep_1ms__keep-alive__higher_is_better.svg]]
 
-[[file:pics/benchmark-result-2025-12-26/sleep_1ms/keep-alive/100 connections requests_sec, sleep 1ms, no keep-alive, higher is better.svg]]
+[[file:pics/benchmark-result-2025-12-26/sleep_1ms/no-keep-alive/100_connections_requests_sec__sleep_1ms__no_keep-alive__higher_is_better.svg]]
 
 On this benchmark, my HTTP handler *always responds after 1ms* to simulate some workloads.
 
@@ -146,11 +146,11 @@ This architecure achives two aspects above.
 
 ** no keep-alive, sleep 1ms
 
-file:pics/benchmark-result-2025-12-26/sleep_1ms/no-keep-alive/100 connections requests_sec, sleep 1ms, no keep-alive, higher is better.svg]]
+[[file:pics/benchmark-result-2025-12-26/sleep_1ms/no-keep-alive/100_connections_requests_sec__sleep_1ms__no_keep-alive__higher_is_better.svg]]
 
 ** keep-alive, sleep 1ms
 
-file:pics/benchmark-result-2025-12-26/sleep_1ms/keep-alive/100 connections requests_sec, sleep 1ms, no keep-alive, higher is better.svg]]
+[[file:pics/benchmark-result-2025-12-26/sleep_1ms/keep-alive/100_connections_requests_sec__sleep_1ms__keep-alive__higher_is_better.svg]]
 
 Hunchentoot は接続ごとに 1 thread を割り当てる。
 
