@@ -7,8 +7,8 @@ and flexible thread count adjustment.
 * Performance tl;dr
 
 [[file:pics/benchmark-result-2025-12-26/sleep_1ms/no-keep-alive/100 connections requests_sec, sleep 1ms, no keep-alive, higher is better.svg]]
-[[
-file:pics/benchmark-result-2025-12-26/sleep_1ms/keep-alive/100 connections requests_sec, sleep 1ms, no keep-alive, higher is better.svg]]
+
+[[file:pics/benchmark-result-2025-12-26/sleep_1ms/keep-alive/100 connections requests_sec, sleep 1ms, no keep-alive, higher is better.svg]]
 
 On this benchmark, my HTTP handler *always responds after 1ms* to simulate some workloads.
 
@@ -130,26 +130,27 @@ from the original Hunchentoot. This is because of two reasons.
 
 [[file:pics/hunchentoot-recycling-taskmaster-architecture.dot.png]]
 
+hunchentoot-recycling-taskmaster tries to take both.
 
+In it, threads don't only work on connected sockets but take a new
+connection from the listen socket, makes a new thread, or end itself.
 
-(stub hunchentoot-recycling-taskmaster;  thread-pooling + variable number of threads.)
+This architecure achives two aspects above.
+
+1. Reducing latency of making a new thread. (effects by thread-pooling)
+2. Automatic increasing/decreasing threads against workloads (effects by changing the number of threads).
 
 * Benchmarking
 
-** Running benchmarks
+** Environments
 
-#+begin_src common-lisp
-  (ql:quickload "hunchentoot-recycling-taskmaster-benchmark")
-  (asdf:test-system '#:hunchentoot-recycling-taskmaster-benchmark)
-#+end_src
+** no keep-alive, sleep 1ms
 
-** no keep-alive, sleep 0.1ms
+file:pics/benchmark-result-2025-12-26/sleep_1ms/no-keep-alive/100 connections requests_sec, sleep 1ms, no keep-alive, higher is better.svg]]
 
-[Image]
+** keep-alive, sleep 1ms
 
-** keep-alive, sleep 0.1ms
-
-[Image]
+file:pics/benchmark-result-2025-12-26/sleep_1ms/keep-alive/100 connections requests_sec, sleep 1ms, no keep-alive, higher is better.svg]]
 
 Hunchentoot は接続ごとに 1 thread を割り当てる。
 
@@ -303,14 +304,7 @@ curl: (52) Empty reply from server
 
 So, I gave up to benchmaking house...
 
-
-* TODO
-
-quicklisp
-ultralisp
-ocicl
-
-* Ideas
+** Ideas
 
 bordeaux-threads-2 に追加された atomic 変数を使って lock を減らすのも試してみた。
 
@@ -323,6 +317,22 @@ Allegro CL においては、結構ききめがあった。
 おそらくは lock の競合がとても重いせいかなと思う。
 
 [Image]
+
+
+** Running benchmarks
+
+To run benchmark by yourself, do below:
+
+#+begin_src common-lisp
+  (ql:quickload "hunchentoot-recycling-taskmaster-benchmark")
+  (asdf:test-system '#:hunchentoot-recycling-taskmaster-benchmark)
+#+end_src
+
+* TODO
+
+quicklisp
+ultralisp
+ocicl
 
 * License
 
