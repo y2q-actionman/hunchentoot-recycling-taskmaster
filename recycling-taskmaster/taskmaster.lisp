@@ -149,6 +149,8 @@ Thread states:
 
 (defun thread-maker-loop (taskmaster
                           &aux (acceptor (hunchentoot:taskmaster-acceptor taskmaster)))
+  "The main loop of 'thread-maker' made by
+`start-thread-maker-thread'."
   (loop
     (unless (bt:wait-on-semaphore (recycling-taskmaster-thread-maker-requests taskmaster))
       (return))
@@ -158,10 +160,14 @@ Thread states:
     (make-parallel-acceptor-thread taskmaster)))
 
 (defmethod request-making-thread (taskmaster &key (count 1))
+  "Requests 'thread-maker' thread to create a new thread.
+ This is for serializing `make-thread' calls."
   (bt:signal-semaphore (recycling-taskmaster-thread-maker-requests taskmaster)
                        :count count))
 
 (defmethod start-thread-maker-thread (taskmaster)
+  "Runs a new 'thread-maker' thread. See comments in
+`handle-incoming-connection' to see the reason why this is required."
   (setf (recycling-taskmaster-thread-maker-process taskmaster)
         (hunchentoot:start-thread taskmaster
                                   (lambda () (thread-maker-loop taskmaster))
@@ -357,7 +363,7 @@ Thread states:
                     :reason (format nil "Timeout occured more than ~R times." +wake-acceptor-for-shutdown-max-retry-count+) )
               (loop-finish)))
           (usocket:unsupported (e)
-            (cond ((and (eq (usocket::feature e) 'usocket::timeout)  ; Allego CL comes here
+            (cond ((and (eq (usocket::feature e) 'usocket::timeout) ; Allego CL comes here
                         (eq (usocket::context e) 'usocket:socket-connect))
                    (incf wake-try-count) ; poka-yoke for an accidental infinite loop.
                    (hunchentoot::acceptor-log-message
