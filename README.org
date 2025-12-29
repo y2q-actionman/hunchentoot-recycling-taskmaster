@@ -14,7 +14,7 @@ On this benchmark, my HTTP handler *always responds after 1ms* to simulate some 
 
 - Hunchentoot is an all-rounder. It works well on Keep-alive connections. I think it is good for typical use-cases.
 - If your workload does not utilize Keep-alive, hunchentoot-recycling-taskmaster may be useful.
-- Woo is very difficult to use. Woo seems fast only when your handlers work with strictly no latency. See [[#about-woo][About Woo]] below.
+- Woo is very difficult to use. Woo seems fast only when your handlers work with very low latency. See [[#about-woo][About Woo]] below.
 
 In detail, See [[#benchmark][Benchmark]] below.
   
@@ -22,22 +22,29 @@ In detail, See [[#benchmark][Benchmark]] below.
 
 ** Caution about Lispworks
 
-On Lispworks, hunchentoot-recycling-taskmaster does not works because
+On Lispworks, hunchentoot-recycling-taskmaster does not work because
 Hunchentoot on that does not handle a listen socket directly.
 
 ** Installation
 
 *** Loading
 
-Currently hunchentoot-recycling-taskmaster is not on Quicklisp, Ultralisp or ocicl.
-Please download it by yourself.
+Currently hunchentoot-recycling-taskmaster is only in [[https://ultralisp.org/][Ultralisp]], not in [[https://www.quicklisp.org/beta/][Quicklisp]] or [[https://github.com/ocicl/ocicl][ocicl]].
+
+When you use Ultralisp, =ql:quickload= it :
+
+#+begin_src common-lisp
+  (ql:quickload "hunchentoot-recycling-taskmaster")
+#+end_src
+
+Or download it by yourself.
 
 #+begin_src sh
   cd ~/quicklisp/local-projects
   git clone https://github.com/y2q-actionman/hunchentoot-recycling-taskmaster.git
 #+end_src
 
-#+begin_src lisp
+#+begin_src common-lisp
   (ql:register-local-projects)            ; Do if required
   (ql:quickload "hunchentoot-recycling-taskmaster")
 #+end_src
@@ -78,7 +85,7 @@ See [[file:demo.lisp][demo.lisp]] for the sample codes above.
 ** API
 
 These symbols are exported from =hunchentoot-recycling-taskmaster= package.
-Please see their docstring also.
+Please see their docstring.
 
 - [Class] =parallel-acceptor=
 - [Class] =parallel-easy-acceptor=
@@ -92,9 +99,8 @@ Please see their docstring also.
 
 * How it works
 
-hunchentoot-recycling-taskmaster is a hunchentoot taskmaster
-implementation that aims to improve the efficiency of connection
-establishment. This section shows how it works.
+This section shows how hunchentoot-recycling-taskmaster works
+comparing other implementations.
 
 ** Hunchentoot; make one thread per connection.
 
@@ -117,7 +123,7 @@ threads kept in its thread pool, reducing latency for new connections.
 However, their benchmarks don't show significant differences from the
 original Hunchentoot. I suspect this is for two reasons:
 
-1. HTTP benchmarking tool, such as "wrk", utilizes keep-alive
+1. HTTP benchmarking tool, such as =wrk=, utilizes keep-alive
    connections.  Effects of thread-pooling are limited at the
    beginning of benchmarking.
 2. Their thread-pool's size may be fixed. They cannot
@@ -176,7 +182,7 @@ To run benchmark by yourself, do below:
 
 *** benchmarking tool
 
-I used *wrk*, like below
+I used =wrk= like below
 
 #+begin_src bash
   # keep-alive
@@ -194,17 +200,17 @@ I used *wrk*, like below
 
 On this benchmark, my HTTP handler *always responds after 1ms* to simulate some workloads.
 
-Hunchentoot is quite fast.  As mentioned above, Hunchentoot assigns
+Hunchentoot was quite fast.  As mentioned above, Hunchentoot assigns
 one thread per connection and keeps using that thread until the
 connection is closed.  Therefore, if a connection is kept alive,
 there's no delay from thread creation, and it doesn't become
 Hunchentoot slow.  =wrk= uses keep-alive by default, so this result
-benefits from this.
+benefited from this.
 
-cl-tbnl-gserver-tmgr is not very fast. This is presumably because it
+cl-tbnl-gserver-tmgr was not very fast. This is presumably because it
 only assigns 8 threads as workers.
 
-Woo is not fast even set to 8 threads. See [[#about-woo][About Woo]] below.
+Woo was not fast even set to 8 threads. See [[#about-woo][About Woo]] below.
 
 *** no keep-alive, sleep 1ms
 
@@ -212,12 +218,11 @@ Woo is not fast even set to 8 threads. See [[#about-woo][About Woo]] below.
 [[file:pics/benchmark-result-2025-12-26/sleep_1ms/no-keep-alive/100_connections_latency(us)__sleep_1ms__no_keep-alive__lower_is_better.svg]]
 
 On this benchmark, HTTP handler still causes 1ms latency, and I
-simulated "no keep-alive" by adding =wrk= option ="-H Connection:
-close"= .
+simulated "no keep-alive" by adding =wrk= option ="-H Connection: close"= .
 
-Hunchentoot became quite slow. In this test, Hunchentoot works like
-"one thread per one request" so latencies caused by creating a new
-thread affected the result.
+Hunchentoot became slow. In this test, Hunchentoot works like "one
+thread per one request" so latencies caused by creating a new thread
+affected the result.
 
 hunchentoot-recycling-taskmaster is designed to work well in this
 situation.
@@ -228,7 +233,7 @@ situation.
 [[file:pics/benchmark-result-2025-12-26/sleep_0ms/keep-alive/100_connections_latency(us)__sleep_0ms__keep-alive__lower_is_better.svg]]
 
 On this benchmark, I set HTTP handler's latency to 0ms. (However some
-latencies caused by small computations still exist. See [[#about-woo][About Woo]] below.)
+latencies caused by small computations still exist. See [[#the-delay-that-i-overlooked][the section about this]] below.)
 
 hunchentoot-recycling-taskmaster became fast. I think this is because
 threads are accepting connections in parallel.
@@ -246,16 +251,15 @@ hunchentoot-recycling-taskmaster coming in a close second.
 
 *** Other results
 
-- See [[pics/benchmark-result-2025-12-26/benchmark-result-2025-12-26.org][benchmark-result-2025-12-26.org]] for graphs with "400 connections" parameters
+- See [[pics/benchmark-result-2025-12-26/benchmark-result-2025-12-26.org][benchmark-result-2025-12-26.org]] for graphs with "400 connections" parameters.
 - See [[benchmark/benchmark-result-2025-12-26][this directory]] for raw data.
 
 ** About Woo
 
 *** How to sleep?
 
-Woo becomes disastrously slow if the handler is even slightly delayed.
-With the above "1ms sleep" benchmark, Woo starts up as follows, which
-leads to terrible results:
+Woo becomes significantly slow if the handler is even slightly delayed.
+With the following setup for the "1ms sleep" benchmark, I observed poor results:"
 
 #+begin_src lisp
   (defparameter *handler-sleep-seconds* 0)
@@ -272,30 +276,30 @@ leads to terrible results:
 #+end_src
 
 This is because Woo is an async server that handles multiple
-connections simultaneously in one thread.  If a delay occurs in the
-processing of one connection, the processing of all other connections
-in the same thread will be delayed.  Given its async architecture,
-=sleep= like above is obviously discouraged.
+connections simultaneously in a thread.  If a delay occurs in the
+processing of one connection, all other connections in the same thread
+will be delayed.  Given its async architecture, =sleep= like above is
+obviously discouraged.
 
-In cases like this, you generally don't sleep inside the async
+In cases like this, you generally don't =sleep= inside the async
 server's event loop.  You run time-consuming processing outside the
 event loop, and when it's finished, you notify the event loop of the
 content to be sent and received, or set up a callback to be called.
+[[benchmark/wookie.lisp][My code for benchmarking Wookie]] does it.
 
-But for some reason, Woo doesn't seem to have such a mechanism.
-I couldn't find it.
+But for some reason, Woo doesn't seem to have such a mechanism.  I
+couldn't find it.  [[https://github.com/quickdocs/quickdocs-api/tree/master][quickdocs-api]], which is said to use Woo, do not
+seem to take such considerations into account.  [[https://github.com/TechEmpower/FrameworkBenchmarks/pull/8313][This code]] is also.
+# (It may be a one reason of not good benchmark linked by [[https://www.reddit.com/r/Common_Lisp/comments/1506kqb/comment/js220a6/][this Reddit thread]].)
 # another one says "Woo has no async foundation", too: https://news.ycombinator.com/item?id=29019217
 # https://lisp-journey.gitlab.io/blog/why-turtl-switched-from-lisp-to-js/
 # https://killtheradio.net/technology/cl-async-non-blocking-asynchronous-programming-for-common-lisp/
-
-[[https://github.com/quickdocs/quickdocs-api/tree/master][quickdocs-api]], which is said to use Woo, and [[https://github.com/TechEmpower/FrameworkBenchmarks/pull/8313][this code]]
-do not seem to take such considerations into account.
-# (It may be a one reason of not good benchmark linked by [[https://www.reddit.com/r/Common_Lisp/comments/1506kqb/comment/js220a6/][this Reddit thread]].)
+# https://www.reddit.com/r/lisp/comments/q4s32u/asynchronous_web_programming_in_cl/
 
 Some people on [[https://news.ycombinator.com/item?id=29019217][here]] or [[https://www.reddit.com/r/Common_Lisp/comments/1hmxv4k/comment/m4feb4b/][here]] have said that "offloading is possible
 with lparallel", but I have yet to find any code that actually does
-this. The following code, which creates a thread in naive, will result
-in an error.
+this. The following naive code, which creates a thread in the handler,
+will result in an error.
 
 #+begin_src common-lisp
   ;; Making a thread like below don't works because `woo.ev:*evloop*' is NIL.
@@ -307,38 +311,40 @@ in an error.
 			  (funcall callback '(200 (:content-type "text/plain") ("Hello, World"))))))))
 
   (clack:clackup *woo-callback-threads-app* :server :woo)
+#+end_src
 
+#+begin_src common-lisp
   ;; Binding like that does not works also.
   (let ((evloop woo.ev:*evloop*))
     (bt:make-thread (lambda (&aux (woo.ev:*evloop* evloop))
 		      (funcall callback '(200 (:content-type "text/plain") ("Hello, World"))))))
 #+end_src
 
-This is because the =woo.ev:*evloop*= variable, which is the
-actual event loop, cannot be referenced in the thread created with
-=(make-thread)= and will become =NIL=.
+This is because the =woo.ev:*evloop*= variable, which is the actual
+event loop, cannot be referenced in a newly created thread with
+=(make-thread)= and become =NIL=.
 
 # By the way, using lparallel like above will be "one-thread-per-request" model.
 # I think that will poorly perform than "one-thread-per-connection" of Hunchentoot.
 
-This problem can be solved by directly handling libev, which Woo
-depends on, directly handling the event loop, and creating sleep etc.
-[[benchmark/about_woo/woo-timer-cb--written-by-gemini--working.lisp][This code]] was written by Gemini-CLI.  It certainly works, and the
-benchmarks aren't bad. However, I don't know how this code works.
-Don't ask me.
+This problem can be solved by directly handling =libev=, which Woo
+depends on, directly handling the event loop.  Gemini-CLI wrote [[benchmark/about_woo/woo-timer-cb--written-by-gemini--working.lisp][this
+code]] to do so.  It certainly works, and the benchmarks aren't
+bad. However, I don't know how this code works.  (Please don't ask
+me.)
 
 So, to benchmark "sleep 1ms" in Woo, I have no choice but to use the
-terrible code example above.  This is a huge disadvantage to Woo, but
-it's unavoidable due to the lack of support in Woo and the way
-quickdocs-api is written.
+bad code above.  This is a huge disadvantage to Woo, but it's
+unavoidable due to the lack of async support in it. This is also the
+way quickdocs-api is written.
 
-*** Don't evaluate special variables
+*** The delay that I overlooked
 
 Some people might look at the above [[#keep-alive-sleep-0ms][keep-alive sleep 0ms result]] and
-wonder "Maybe Woo isn't as fast as people say?"  I thought the same
+wonder "Why is Woo not as fast as people say?"  I thought the same
 thing, investigated and found that the cause was that the handler
 definition for this benchmark calls =(handler-small-sleep)=
-defined above.
+defined above. Let's see it again:
 
 #+begin_src common-lisp
   (defparameter *handler-sleep-seconds* 0)
@@ -351,9 +357,9 @@ This code does the following:
 1. Eval the special variable (which becomes 0).
 2. Call =cl:sleep= with 0 (which should return immediately).
 
-These two processes don't take much time, but unfortunately they cause
-problems in woo.  Changing =handler-small-sleep= as follows made it
-faster, as shown in the following graph.
+These two processes should not take much time, but unfortunately they
+may cause performance problems in Woo.  Changing =handler-small-sleep=
+as follows made it faster, as shown in the following graph.
 
 #+begin_src common-lisp
   (defun handler-small-sleep ()
@@ -363,23 +369,40 @@ faster, as shown in the following graph.
 [[file:pics/benchmark-result-2025-12-26/sleep_0ms_no_special_vars/keep-alive/100_connections_requests_sec__sleep_commented_out__keep-alive__higher_is_better.svg]]
 [[file:pics/benchmark-result-2025-12-26/sleep_0ms_no_special_vars/keep-alive/100_connections_latency(us)__sleep_commented_out__keep-alive__lower_is_better.svg]]
 
-So, to get the most out of Woo's performance, you should not evalutate
-special variables either.  In other words, in Woo your handlers must
-work with strictly no latency.
+I tried some tests after a day, resulted here (with =(defparameter *handler-sleep-seconds* 0)=) :
 
-If Woo's situation doesn't change, it could be said that Woo is very
-fast only when your handlers don't compute anything.  I think Woo is
-*only* good for serving static pages
+|                                                                          | requests/sec | latency |
+|--------------------------------------------------------------------------+--------------+---------|
+| =(sleep *handler-sleep-seconds*)=                                        |     44770.99 | 2.27ms  |
+| =(sleep 0)=                                                              |     49158.22 | 2.06ms  |
+| =*handler-sleep-seconds*=                                                |    215447.83 | 0.95ms  |
+| do nothing                                                               |    247789.97 | 1.00ms  |
+| =(when (plusp *handler-sleep-seconds*) (sleep *handler-sleep-seconds*))= |    240050.33 | 1.26ms  |
+ 
+
+So, to get the most out of Woo's performance, I should not call
+=sleep= even with 0. 
+
+In other words, when using Woo I will be troubled by overlooking any
+little delays. I must examine handlers should work with very low
+latency.  If Woo's situation doesn't change, it could be argued that
+Woo is very fast only when your handlers perform minimal computation.
+I think Woo is good for serving static pages
 # or microbenchmarking.
-# but why did such a thing by Lisp? Use nginx.
+# (but why did such a thing by Lisp? Use others, like nginx.)
 
 * TODO TODO list
 
 ** register to systems
 
-- [ ] quicklisp
-- [X] ultralisp
+- [ ] Quicklisp
+- [X] Ultralisp
 - [ ] ocicl
+
+** Support Lispworks
+
+Because Hunchentoot on Lispworks does not hold a listen socket on its
+structure, hunchentoot-recycling-taskmaster cannot utilize it.
 
 ** Benchmark other servers
 
