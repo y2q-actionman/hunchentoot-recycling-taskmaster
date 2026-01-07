@@ -29,9 +29,9 @@ Hunchentoot on that does not handle a listen socket directly.
 
 *** Loading
 
-Currently hunchentoot-recycling-taskmaster is only in [[https://ultralisp.org/][Ultralisp]], not in [[https://www.quicklisp.org/beta/][Quicklisp]] or [[https://github.com/ocicl/ocicl][ocicl]].
+Currently hunchentoot-recycling-taskmaster is in [[https://ultralisp.org/][Ultralisp]] and [[https://www.quicklisp.org/beta/][Quicklisp]] . Not in [[https://github.com/ocicl/ocicl][ocicl]].
 
-When you use Ultralisp, =ql:quickload= it :
+When you use Ultralisp or Quicklisp, =ql:quickload= it :
 
 #+begin_src common-lisp
   (ql:quickload "hunchentoot-recycling-taskmaster")
@@ -395,7 +395,7 @@ I think Woo is good for serving static pages
 
 ** register to systems
 
-- [ ] Quicklisp
+- [X] [[http://blog.quicklisp.org/2026/01/january-2026-quicklisp-dist-update-now.html][Quicklisp added this]] before my request. Thanks!
 - [X] Ultralisp
 - [ ] ocicl
 
