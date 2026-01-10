@@ -14,3 +14,27 @@
    :cl-tbnl-gserver-tmgr
    :max-thread-count threads-list
    *cl-tbnl-gserver-tmgr-default-thread-count*))
+
+
+(defun bench-cl-tbnl-gserver-tmgr--extra ()
+  (let ((*wrk-duration* 30)
+        (*wrk-threads-and-connections* '((4 100)))
+        (hunchentoot::*default-max-thread-count* nil)
+        (hunchentoot::*default-max-accept-count* nil)
+        (threads
+          `(1 2 5
+              ,*cl-tbnl-gserver-tmgr-default-thread-count* ; 8
+              ,(- (nproc) (caar *cl-tbnl-gserver-tmgr--extra-test-wrk-threads*))
+              ,(nproc)
+              10 25 50 75 100
+              125 150 175 200)))
+    (bench-cl-tbnl-gserver-tmgr threads)))
+
+
+(defun bench-cl-tbnl-gserver-tmgr--extra-in-my-cpu-cores ()
+  (let ((*wrk-duration* 30)
+        (*wrk-threads-and-connections* '((4 4)))
+        (hunchentoot::*default-max-thread-count* nil)
+        (hunchentoot::*default-max-accept-count* nil)
+        (threads '(1 2 3 4 5 6 7 8 9)))
+    (bench-cl-tbnl-gserver-tmgr threads)))
