@@ -16,7 +16,8 @@
                          (eql threads threads-default-count))
     collect
     (bench-hunchentoot-using-class acceptor-class taskmaster-class logname asdf-system-name
-                                   :taskmaster-args (list taskmaster-thread-argname threads))))
+                                   :taskmaster-args (if taskmaster-thread-argname
+                                                        (list taskmaster-thread-argname threads)))))
 
 (defun bench-hunchentoot-recycling-taskmaster
     (&optional (threads-list (list *hunchentoot-recycling-taskmaster-default-thread-count*)))
@@ -37,7 +38,8 @@
         (threads
           `(1 2 5
               ,*cl-tbnl-gserver-tmgr-default-thread-count* ; 8
-              ,(- (nproc) (caar *cl-tbnl-gserver-tmgr--extra-test-wrk-threads*))
+              ,@ (let ((diff (- (nproc) (caar *wrk-threads-and-connections*))))
+                   (if (plusp diff) `(,diff)))
               ,(nproc)
               10 25 50 75 100
               125 150 175 200)))
